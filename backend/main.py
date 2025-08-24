@@ -3,24 +3,44 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any, Dict, List, Optional, Tuple
-import os, shutil
+from typing import Any, Dict, List, Optional
+from fastapi.middleware.cors import CORSMiddleware
+import os
+import shutil
 
 from docufy_ocr import __version__ as docuocr_version, DocuOCR
 
 app = FastAPI(title="DocuOCR Text Extraction API", version="1.0.0")
 
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 def _make_ocr(dpi: Optional[int] = None, lang: Optional[str] = None) -> DocuOCR:
     kwargs = {}
-    if dpi is not None: kwargs["dpi"] = dpi
-    if lang is not None: kwargs["lang"] = lang
+    if dpi is not None:
+        kwargs["dpi"] = dpi
+    if lang is not None:
+        kwargs["lang"] = lang
     return DocuOCR(**kwargs) if kwargs else DocuOCR()
+
 
 class ExtractResponse(BaseModel):
     filename: str
     text: str
-    words: List[Dict[str, Any]]  
+    words: List[Dict[str, Any]]
     metadata: Dict[str, Any]
+
 
 def _save_to_temp(upload: UploadFile) -> Path:
     suffix = Path(upload.filename or "upload").suffix
@@ -29,6 +49,7 @@ def _save_to_temp(upload: UploadFile) -> Path:
         shutil.copyfileobj(upload.file, f)
     return Path(tmp.name)
 
+
 def _cleanup(paths: List[Path]) -> None:
     for p in paths:
         try:
@@ -36,13 +57,16 @@ def _cleanup(paths: List[Path]) -> None:
         except Exception:
             pass
 
+
 @app.get("/health", response_class=PlainTextResponse)
 def health() -> str:
     return "ok"
 
+
 @app.get("/version")
 def version() -> Dict[str, str]:
     return {"service": app.version, "docuocr": docuocr_version}
+
 
 @app.post("/extract", response_model=ExtractResponse)
 async def extract_document(
@@ -67,10 +91,12 @@ async def extract_document(
             filename=file.filename,
             text=text,
             words=words,
-            metadata={"docuocr_version": docuocr_version, "dpi": ocr.dpi, "lang": ocr.lang},
+            metadata={"docuocr_version": docuocr_version,
+                      "dpi": ocr.dpi, "lang": ocr.lang},
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"OCR failed: {e}")
+
 
 @app.post("/extract/multi")
 async def extract_multiple(

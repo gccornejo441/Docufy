@@ -10,8 +10,6 @@ interface DropzoneProps {
   onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onBrowseClick: () => void;
   file: File | null;
-  onRun: () => void;
-  disabled?: boolean;
 }
 
 export default function Dropzone({
@@ -22,9 +20,7 @@ export default function Dropzone({
   onDrop,
   onFileChange,
   onBrowseClick,
-  file,
-  onRun,
-  disabled,
+  file
 }: DropzoneProps) {
   const dropText = file
     ? `Selected: ${file.name} (${prettyBytes(file.size)})`
@@ -61,19 +57,6 @@ export default function Dropzone({
                      focus:ring-2 focus:ring-[var(--mint-9)]"
         >
           Choose File
-        </button>
-
-        <button
-          onClick={onRun}
-          type="button"
-          disabled={disabled}
-          className="px-4 py-2 rounded
-                     bg-[var(--mint-9)] text-[var(--gray-1)]
-                     hover:bg-[var(--mint-10)]
-                     disabled:opacity-60
-                     focus:outline-none focus:ring-2 focus:ring-[var(--mint-9)]"
-        >
-          Run OCR
         </button>
       </div>
     </div>

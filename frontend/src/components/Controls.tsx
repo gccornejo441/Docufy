@@ -8,6 +8,8 @@ interface ControlsProps {
   onReset: () => void;
   onRun: () => void;
   isUploading: boolean;
+  isDocReady: boolean;
+  onOpenDoc: () => void;
 }
 
 export default function Controls({
@@ -18,14 +20,13 @@ export default function Controls({
   onReset,
   onRun,
   isUploading,
+  isDocReady,
+  onOpenDoc,
 }: ControlsProps) {
   return (
     <section className="flex flex-wrap gap-4 items-end">
       <div>
-        <Label.Root
-          htmlFor="dpi"
-          className="block text-sm text-[var(--gray-11)] mb-1"
-        >
+        <Label.Root htmlFor="dpi" className="block text-sm text-[var(--gray-11)] mb-1">
           DPI
         </Label.Root>
         <input
@@ -46,10 +47,7 @@ export default function Controls({
       </div>
 
       <div>
-        <Label.Root
-          htmlFor="lang"
-          className="block text-sm text-[var(--gray-11)] mb-1"
-        >
+        <Label.Root htmlFor="lang" className="block text-sm text-[var(--gray-11)] mb-1">
           Language
         </Label.Root>
         <input
@@ -70,6 +68,19 @@ export default function Controls({
       </div>
 
       <div className="ml-auto flex gap-3">
+        <button
+          type="button"
+          onClick={onOpenDoc}
+          disabled={!isDocReady}
+          className="px-4 py-2 rounded
+                 bg-[var(--mint-9)] text-[var(--gray-1)]
+                     hover:bg-[var(--mint-10)]
+                     disabled:opacity-60 disabled:cursor-not-allowed
+                     focus:outline-none focus:ring-2 focus:ring-[var(--mint-9)]"
+        >
+          Open Viewer
+        </button>
+
         <button
           className="px-4 py-2 rounded
                      bg-[var(--gray-5)] text-[var(--gray-12)]

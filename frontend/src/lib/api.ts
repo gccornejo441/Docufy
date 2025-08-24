@@ -1,10 +1,7 @@
-// src/lib/api.ts
 import type { ExtractResponse } from "./types";
 
-/** Vite env is typed via vite-env.d.ts; no `any` cast needed */
 export const API_BASE: string = import.meta.env?.VITE_API_BASE ?? "";
 
-/** Typed HTTP error you can catch in hooks (has `.code` like your current logic expects) */
 export class HttpError extends Error {
   code: number;
   constructor(message: string, code: number) {
