@@ -3,9 +3,10 @@ import { useOcr } from "./hooks/useOcr";
 import Controls from "./components/Controls";
 import Dropzone from "./components/Dropzone";
 import Results from "./components/Results";
-import Toaster from "./components/Toaster";
+import Toaster from "./components/Toaster"; // 👈 fixed extra space
 import { API_BASE } from "./lib/api";
 import DocumentViewerDialog from "./components/DocumentViewerDialog";
+import PdfRegionSelector from "./components/PdfRegionSelector/PdfRegionSelector";
 
 export default function App() {
   const ocr = useOcr({ dpi: 360, lang: "eng" });
@@ -13,6 +14,10 @@ export default function App() {
   const [viewerOpen, setViewerOpen] = React.useState(false);
   const showError = Boolean(ocr.error);
 
+  // Normalize API base (avoid trailing slash issues)
+  const apiBase = React.useMemo(() => (API_BASE || "").replace(/\/$/, ""), []);
+
+  // Blob URL for the selected file (for the viewer)
   const fileUrl = React.useMemo(
     () => (ocr.file ? URL.createObjectURL(ocr.file) : null),
     [ocr.file]
@@ -22,6 +27,7 @@ export default function App() {
     if (showError) setToastOpen(true);
   }, [showError]);
 
+  // Cleanup object URL
   React.useEffect(() => {
     return () => {
       if (fileUrl) URL.revokeObjectURL(fileUrl);
@@ -50,6 +56,7 @@ export default function App() {
           }}
           onRun={ocr.runOcr}
           isUploading={ocr.isUploading}
+          // enable the new control only when a file is ready
           isDocReady={!!ocr.file}
           onOpenDoc={() => setViewerOpen(true)}
         />
@@ -86,32 +93,21 @@ export default function App() {
         description={ocr.error}
       />
 
-      {/* NEW: Document viewer dialog */}
-      <DocumentViewerDialog open={viewerOpen} onOpenChange={setViewerOpen} title="Document Viewer">
-        {fileUrl ? (
-          // Drop your interactive PDF component in here
-          // <PdfRegionSelector
-          //   fileUrl={fileUrl}
-          //   onExtract={async ({ pageNumber, rectPdfPoints }) => {
-          //     const form = new FormData();
-          //     form.append("file", ocr.file!);
-          //     form.append("pageNumber", String(pageNumber));
-          //     form.append("x1", String(rectPdfPoints.x1));
-          //     form.append("y1", String(rectPdfPoints.y1));
-          //     form.append("x2", String(rectPdfPoints.x2));
-          //     form.append("y2", String(rectPdfPoints.y2));
-          //     form.append("ocr_lang", ocr.lang);
-          //     const res = await fetch(`${API_BASE || ""}/extract-pdf-region`, {
-          //       method: "POST",
-          //       body: form,
-          //     });
-          //     const data = await res.json();
-          //     console.log("Extracted:", data);
-          //   }}
-          // />
-          <div className="h-full grid place-items-center text-[var(--gray-11)]">
-            Add your PdfRegionSelector here
-          </div>
+      {/* Document viewer dialog */}
+      <DocumentViewerDialog
+        open={viewerOpen}
+        onOpenChange={setViewerOpen}
+        title="Document Viewer"
+        // optional: description="Select a region to extract text"
+        // optional (from the earlier version): highContrast={true}
+      >
+        {fileUrl && ocr.file ? (
+          <PdfRegionSelector
+            fileUrl={fileUrl}
+            file={ocr.file}
+            lang={ocr.lang}
+            apiBase={apiBase}
+          />
         ) : null}
       </DocumentViewerDialog>
     </div>
