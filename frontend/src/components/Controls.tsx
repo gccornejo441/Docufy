@@ -1,10 +1,10 @@
-import * as Label from "@radix-ui/react-label";
+import React from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { MoreVertical, Settings, RotateCcw } from "lucide-react";
+import Button from "./ui/Button";
 
 interface ControlsProps {
-  dpi: number;
-  setDpi: (v: number) => void;
-  lang: string;
-  setLang: (v: string) => void;
   onReset: () => void;
   onRun: () => void;
   isUploading: boolean;
@@ -13,98 +13,99 @@ interface ControlsProps {
 }
 
 export default function Controls({
-  dpi,
-  setDpi,
-  lang,
-  setLang,
   onReset,
   onRun,
   isUploading,
   isDocReady,
   onOpenDoc,
 }: ControlsProps) {
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
+
   return (
-    <section className="flex flex-wrap gap-4 items-end">
-      <div>
-        <Label.Root htmlFor="dpi" className="block text-sm text-[var(--gray-11)] mb-1">
-          DPI
-        </Label.Root>
-        <input
-          id="dpi"
-          type="number"
-          className="w-28 px-3 py-2 rounded border
-                     bg-[var(--color-panel-solid)]
-                     border-[var(--gray-a7)]
-                     text-[var(--gray-12)]
-                     placeholder-[var(--gray-10)]
-                     focus:outline-none focus:ring-2 focus:ring-[var(--mint-9)]"
-          value={dpi}
-          onChange={(e) => setDpi(Number(e.target.value) || 0)}
-          min={72}
-          step={12}
-          inputMode="numeric"
-        />
-      </div>
+    <section className="flex flex-wrap gap-4 items-end w-full">
+      <div className="ml-auto flex gap-3 items-center">
 
-      <div>
-        <Label.Root htmlFor="lang" className="block text-sm text-[var(--gray-11)] mb-1">
-          Language
-        </Label.Root>
-        <input
-          id="lang"
-          type="text"
-          className="w-40 px-3 py-2 rounded border
-                     bg-[var(--color-panel-solid)]
-                     border-[var(--gray-a7)]
-                     text-[var(--gray-12)]
-                     placeholder-[var(--gray-10)]
-                     focus:outline-none focus:ring-2 focus:ring-[var(--mint-9)]"
-          value={lang}
-          onChange={(e) => setLang(e.target.value)}
-          placeholder="eng or eng+spa"
-          autoCorrect="off"
-          spellCheck={false}
-        />
-      </div>
-
-      <div className="ml-auto flex gap-3">
-        <button
-          type="button"
-          onClick={onOpenDoc}
-          disabled={!isDocReady}
-          className="px-4 py-2 rounded
-                 bg-[var(--mint-9)] text-[var(--gray-1)]
-                     hover:bg-[var(--mint-10)]
-                     disabled:opacity-60 disabled:cursor-not-allowed
-                     focus:outline-none focus:ring-2 focus:ring-[var(--mint-9)]"
-        >
+        <Button variant="primary" onClick={onOpenDoc} disabled={!isDocReady}>
           Open Viewer
-        </button>
+        </Button>
 
-        <button
-          className="px-4 py-2 rounded
-                     bg-[var(--gray-5)] text-[var(--gray-12)]
-                     hover:bg-[var(--gray-6)]
-                     focus:outline-none focus:ring-2 focus:ring-[var(--mint-9)]"
-          onClick={onReset}
-          type="button"
-        >
-          Reset
-        </button>
-
-        <button
-          className="px-4 py-2 rounded
-                     bg-[var(--mint-9)] text-[var(--gray-1)]
-                     hover:bg-[var(--mint-10)]
-                     disabled:opacity-60
-                     focus:outline-none focus:ring-2 focus:ring-[var(--mint-9)]"
-          onClick={onRun}
-          disabled={isUploading}
-          type="button"
-        >
+        <Button variant="primary" onClick={onRun} disabled={isUploading}>
           {isUploading ? "Processing…" : "Run OCR"}
-        </button>
+        </Button>
       </div>
+
+      <Dialog.Root open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay
+            className="fixed inset-0 bg-black/40 backdrop-blur-[2px]
+                       transition-opacity duration-200
+                       data-[state=open]:opacity-100 data-[state=closed]:opacity-0"
+          />
+          <Dialog.Content
+            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
+                       w-[min(92vw,520px)] rounded-2xl shadow-2xl border p-5
+                       bg-white text-neutral-900
+                       dark:bg-neutral-900 dark:text-neutral-50
+                       border-neutral-200 dark:border-neutral-700"
+          >
+            <Dialog.Title className="text-lg font-semibold mb-2">Advanced Settings</Dialog.Title>
+            <p className="text-sm text-[var(--gray-10)]">
+              Configure advanced options here (e.g., clarity, language, DPI) when needed.
+            </p>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <Dialog.Close asChild>
+                <Button variant="secondary">Close</Button>
+              </Dialog.Close>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger asChild>
+          <button
+            className="p-2 rounded hover:bg-[var(--gray-3)] focus:outline-none focus:ring-2 focus:ring-[var(--mint-9)]"
+            aria-label="More options"
+          >
+            <MoreVertical className="w-5 h-5 text-[var(--gray-12)]" />
+          </button>
+        </DropdownMenu.Trigger>
+
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            align="end"
+            className="min-w-[180px] rounded-md border shadow-md
+                         bg-white text-neutral-900
+                         dark:bg-neutral-900 dark:text-neutral-50
+                         border-neutral-200 dark:border-neutral-700
+                         p-1"
+          >
+            <DropdownMenu.Item
+              onSelect={() => setSettingsOpen(true)}
+              className="px-3 py-2 text-sm rounded cursor-pointer
+                           hover:bg-[var(--gray-3)] dark:hover:bg-neutral-800
+                           flex items-center gap-2"
+            >
+              <Settings className="w-4 h-4" />
+              <span>Settings</span>
+            </DropdownMenu.Item>
+
+            <DropdownMenu.Separator className="my-1 h-px bg-neutral-200 dark:bg-neutral-700" />
+
+            <DropdownMenu.Item
+              onSelect={onReset}
+              className="px-3 py-2 text-sm rounded cursor-pointer
+                           hover:bg-[var(--gray-3)] dark:hover:bg-neutral-800
+                           flex items-center gap-2"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>Reset</span>
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+
     </section>
   );
 }
