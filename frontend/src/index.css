@@ -2,14 +2,62 @@
 @import "@radix-ui/themes/styles.css";
 
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+  --surface-1: var(--color-panel, #fff);
+  --focus-ring: var(--mint-9);
 
-  color-scheme: light dark;
+  --btn-primary-bg: var(--mint-9);
+  --btn-primary-bg-hover: var(--mint-10);
+  --btn-primary-fg: #000000;
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --btn-secondary-bg: var(--gray-4);
+  --btn-secondary-bg-hover: var(--gray-5);
+  --btn-secondary-fg: var(--gray-12);
+
+  --btn-settings-bg: var(--gray-3);
+  --btn-settings-bg-hover: var(--gray-4);
+  --btn-settings-fg: var(--gray-12);
+
+  --btn-primary-bg-hc: var(--mint-11);
+  --btn-primary-fg-hc: #ffffff;
+
+  --btn-secondary-bg-hc: var(--gray-1);
+  --btn-secondary-fg-hc: var(--gray-12);
+
+  --btn-settings-bg-hc: var(--gray-1);
+  --btn-settings-fg-hc: var(--gray-12);
+}
+
+:root.dark,
+:root[data-theme="dark"] {
+  --surface-1: var(--color-panel, #0a0a0a);
+  --focus-ring: var(--mint-9);
+
+  --btn-primary-bg: var(--mint-9);
+  --btn-primary-bg-hover: var(--mint-10);
+  --btn-primary-fg: var(--gray-12);
+
+  --btn-secondary-bg: var(--gray-3);
+  --btn-secondary-bg-hover: var(--gray-4);
+  --btn-secondary-fg: var(--gray-12);
+
+  --btn-settings-bg: var(--gray-2);
+  --btn-settings-bg-hover: var(--gray-3);
+  --btn-settings-fg: var(--gray-12);
+
+  --btn-primary-bg-hc: var(--mint-11);
+  --btn-primary-fg-hc: #ffffff;
+
+  --btn-secondary-bg-hc: var(--gray-1);
+  --btn-secondary-fg-hc: var(--gray-12);
+
+  --btn-settings-bg-hc: var(--gray-1);
+  --btn-settings-fg-hc: var(--gray-12);
+}
+
+/* Help the UA choose correct default colors (inputs, etc.) */
+:root { color-scheme: light; }
+:root.dark, :root[data-theme="dark"] { color-scheme: dark; }
+
+@media (forced-colors: active) {
+  :root { --focus-ring: CanvasText; }
 }

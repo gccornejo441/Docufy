@@ -8,12 +8,31 @@
     />
     <meta name="color-scheme" content="light dark" />
 
+    <script>
+      (() => {
+        const KEY = "theme";
+        const saved = localStorage.getItem(KEY);
+        const sysDark = window.matchMedia?.(
+          "(prefers-color-scheme: dark)"
+        ).matches;
+        const resolved =
+          saved === "light" || saved === "dark"
+            ? saved
+            : sysDark
+            ? "dark"
+            : "light";
+        const root = document.documentElement;
+        root.classList.toggle("dark", resolved === "dark");
+        root.setAttribute("data-theme", resolved);
+        root.style.colorScheme = resolved;
+      })();
+    </script>
+
     <link rel="icon" type="image/svg+xml" href="/docufy.svg" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="Your app description" />
-
     <title>%VITE_APP_TITLE%</title>
   </head>
   <body>

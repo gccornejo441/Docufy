@@ -63,7 +63,6 @@ export default function Toolbar({
 }: ToolbarProps) {
   const pct = Math.round(scale * 100);
 
-  // Keyboard shortcuts:
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
@@ -100,36 +99,32 @@ export default function Toolbar({
     return () => window.removeEventListener("keydown", handler);
   }, [onFitWidth, onFitPage, onRotateLeft, onRotateRight, onResetRotation, onToggleFullscreen]);
 
+  const ctaDisabled = !canExtract || extracting;
+
   return (
-    <Tooltip.Provider delayDuration={200}>
+    <Tooltip.Provider delayDuration={150}>
       <div
         aria-label="PDF toolbar"
         className={[
           "sticky top-0 z-10 w-full",
           "grid grid-cols-[1fr_auto] items-center gap-2",
-          "rounded-2xl border border-[var(--gray-a6)]",
-          "bg-[var(--color-panel)]/80 supports-[backdrop-filter]:bg-[var(--color-panel)]/60 backdrop-blur",
-          "px-2 py-1.5 shadow-sm",
+          "rounded-lg border border-[var(--gray-a6)]",
+          "bg-[var(--surface-1)] px-2 py-1.5",
+          "shadow-sm",
         ].join(" ")}
       >
         {/* LEFT: scrollable controls */}
-        <div
-          className={[
-            "min-w-0 overflow-x-auto overflow-y-hidden",
-            "[-webkit-overflow-scrolling:touch]",
-            "relative whitespace-nowrap -mx-1 px-1",
-          ].join(" ")}
-        >
+        <div className="min-w-0 overflow-x-auto overflow-y-hidden [-webkit-overflow-scrolling:touch] relative whitespace-nowrap -mx-1 px-1">
           <div className="inline-flex items-center gap-2 align-middle">
             {/* Navigation */}
             <div className="inline-flex items-center gap-1">
               <IconButton tooltip="Previous page" disabled={!hasPdf || pageNumber <= 1} onClick={onPrev}>
                 <ChevronLeft className="size-4" />
-                <span className="sr-only">Previous page</span>
               </IconButton>
 
               <div
-                className="px-2 py-1 text-[11px] sm:text-xs font-medium text-[var(--gray-12)] rounded-full border border-[var(--gray-a6)] bg-[var(--gray-2)]/60 text-center"
+                className="px-2 py-1 text-[11px] sm:text-xs font-medium rounded-md border border-[var(--gray-a6)]
+                           bg-[var(--btn-secondary-bg)] text-[var(--btn-secondary-fg)]"
                 aria-live="polite"
               >
                 Page {Math.max(1, pageNumber)} / {Math.max(1, numPages || 1)}
@@ -137,7 +132,6 @@ export default function Toolbar({
 
               <IconButton tooltip="Next page" disabled={!hasPdf || pageNumber >= numPages} onClick={onNext}>
                 <ChevronRight className="size-4" />
-                <span className="sr-only">Next page</span>
               </IconButton>
             </div>
 
@@ -147,11 +141,12 @@ export default function Toolbar({
             <div className="inline-flex items-center gap-1">
               <IconButton tooltip="Zoom out (−)" onClick={onZoomOut}>
                 <ZoomOut className="size-4" />
-                <span className="sr-only">Zoom out</span>
               </IconButton>
 
               <div
-                className="px-2 py-1 rounded-full border border-[var(--gray-a6)] bg-[var(--gray-2)]/60 text-center text-[11px] sm:text-xs font-medium text-[var(--gray-12)] tabular-nums"
+                className="px-2 py-1 rounded-md border border-[var(--gray-a6)]
+                           bg-[var(--btn-secondary-bg)] text-[var(--btn-secondary-fg)]
+                           text-[11px] sm:text-xs font-medium tabular-nums"
                 title={`${pct}%`}
                 aria-live="polite"
               >
@@ -160,19 +155,14 @@ export default function Toolbar({
 
               <IconButton tooltip="Zoom in (+)" onClick={onZoomIn}>
                 <ZoomIn className="size-4" />
-                <span className="sr-only">Zoom in</span>
               </IconButton>
 
-              {/* Fit to width (W) */}
               <IconButton tooltip="Fit to width (W)" onClick={onFitWidth}>
                 <Maximize2 className="size-4" />
-                <span className="sr-only">Fit to width</span>
               </IconButton>
 
-              {/* Fit to page (P) */}
               <IconButton tooltip="Fit to page (P)" onClick={onFitPage}>
                 <Maximize2 className="size-4 rotate-45" />
-                <span className="sr-only">Fit to page</span>
               </IconButton>
             </div>
 
@@ -182,14 +172,12 @@ export default function Toolbar({
             <div className="inline-flex items-center gap-1">
               <IconButton tooltip="Rotate left (Shift+R)" onClick={onRotateLeft}>
                 <RotateCcw className="size-4" />
-                <span className="sr-only">Rotate left</span>
               </IconButton>
               <IconButton tooltip="Rotate right (R)" onClick={onRotateRight}>
                 <RotateCw className="size-4" />
-                <span className="sr-only">Rotate right</span>
               </IconButton>
               <IconButton
-                tooltip={`Reset rotation`}
+                tooltip="Reset rotation"
                 onClick={onResetRotation}
                 disabled={rotation % 360 === 0}
               >
@@ -197,7 +185,7 @@ export default function Toolbar({
               </IconButton>
             </div>
 
-            {/* Optional fullscreen */}
+            {/* Fullscreen */}
             {onToggleFullscreen && (
               <>
                 <Divider />
@@ -208,9 +196,6 @@ export default function Toolbar({
                     aria-pressed={!!isFullscreen}
                   >
                     <Maximize2 className={isFullscreen ? "size-4 rotate-45" : "size-4"} />
-                    <span className="sr-only">
-                      {isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-                    </span>
                   </IconButton>
                 </div>
               </>
@@ -222,51 +207,58 @@ export default function Toolbar({
             <div className="inline-flex items-center">
               <IconButton tooltip="Clear selection (Esc)" onClick={onClearSelection} disabled={!hasPdf}>
                 <Eraser className="size-4" />
-                <span className="sr-only">Clear selection</span>
               </IconButton>
             </div>
           </div>
         </div>
 
-        {/* RIGHT: CTA */}
+        {/* RIGHT: CTA (neutral using secondary tokens) */}
         <div className="flex items-center justify-end">
           <Tooltip.Root>
             <Tooltip.Trigger asChild>
-              <button
-                onClick={onExtract}
-                disabled={!canExtract || extracting}
-                aria-busy={extracting}
-                className={[
-                  "inline-flex items-center justify-center gap-2",
-                  "whitespace-nowrap flex-none",
-                  "rounded-xl px-3 py-2 text-sm font-semibold shadow-md",
-                  "bg-[var(--mint-9)] text-[var(--gray-1)] hover:bg-[var(--mint-10)]",
-                  "ring-1 ring-inset ring-[var(--mint-a6)]",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--mint-11)]",
-                  "disabled:opacity-60 disabled:cursor-not-allowed",
-                  "transition-[background,box-shadow,transform] active:translate-y-[0.5px]",
-                ].join(" ")}
+              <span
+                className={ctaDisabled ? "inline-flex cursor-not-allowed" : "inline-flex"}
+                tabIndex={ctaDisabled ? 0 : -1}
+                aria-disabled={ctaDisabled}
               >
-                {extracting ? (
-                  <>
-                    <Loader2 className="size-4 animate-spin" />
-                    <span>Extracting…</span>
-                  </>
-                ) : (
-                  <>
-                    <Wand2 className="size-4" />
-                    <span>Extract Selection</span>
-                  </>
-                )}
-              </button>
+                <button
+                  onClick={onExtract}
+                  disabled={ctaDisabled}
+                  aria-busy={extracting}
+                  className={[
+                    "inline-flex items-center justify-center gap-2 whitespace-nowrap flex-none rounded-md px-3 py-2 text-sm font-medium",
+                    "border border-[var(--gray-a6)]",
+                    "bg-[var(--btn-secondary-bg)] hover:bg-[var(--btn-secondary-bg-hover)] text-[var(--btn-secondary-fg)]",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]",
+                    "disabled:opacity-60 disabled:cursor-not-allowed disabled:pointer-events-none",
+                    "transition-[background,transform] active:translate-y-[0.5px]",
+                  ].join(" ")}
+                >
+                  {extracting ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" />
+                      <span>Extracting…</span>
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="size-4" />
+                      <span>Extract Selection</span>
+                    </>
+                  )}
+                </button>
+              </span>
             </Tooltip.Trigger>
-            <Tooltip.Content
-              sideOffset={8}
-              className="hidden md:block rounded-md border border-[var(--gray-a6)] bg-[var(--color-panel)] px-2 py-1 text-xs text-[var(--gray-12)] shadow"
-            >
-              Run OCR for the selected region
-              <Tooltip.Arrow className="fill-[var(--gray-a6)]" />
-            </Tooltip.Content>
+
+            <Tooltip.Portal>
+              <Tooltip.Content
+                sideOffset={8}
+                className="hidden md:block z-[70] rounded-md border border-[var(--gray-a6)]
+                           bg-[var(--surface-1)] px-2 py-1 text-xs text-[var(--gray-12)] shadow"
+              >
+                Run OCR for the selected region
+                <Tooltip.Arrow className="fill-[var(--gray-a6)]" />
+              </Tooltip.Content>
+            </Tooltip.Portal>
           </Tooltip.Root>
         </div>
       </div>
@@ -278,39 +270,52 @@ function IconButton({
   tooltip,
   className = "",
   children,
+  disabled,
   ...btn
 }: React.ComponentProps<"button"> & { tooltip: string }) {
+  const ButtonEl = (
+    <button
+      {...btn}
+      disabled={disabled}
+      className={[
+        "inline-flex items-center justify-center px-2.5 py-1.5 rounded-md",
+        "border border-[var(--gray-a6)]",
+        "bg-[var(--btn-settings-bg)] hover:bg-[var(--btn-settings-bg-hover)] text-[var(--btn-settings-fg)]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]",
+        "disabled:opacity-50 disabled:pointer-events-none",
+        "transition-colors",
+        className,
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+
   return (
     <Tooltip.Root>
       <Tooltip.Trigger asChild>
-        <button
-          {...btn}
-          className={[
-            "inline-flex items-center justify-center",
-            "rounded-xl border border-[var(--gray-a6)]",
-            "bg-[var(--gray-2)]/60 hover:bg-[var(--gray-3)] active:bg-[var(--gray-4)]",
-            "px-2.5 py-1.5",
-            "text-[var(--gray-12)] shadow-[0_1px_0_0_var(--gray-a3)_inset]",
-            "disabled:opacity-50 disabled:pointer-events-none",
-            "transition-colors",
-            className,
-          ].join(" ")}
+        <span
+          className={disabled ? "inline-flex cursor-not-allowed" : "inline-flex"}
+          tabIndex={disabled ? 0 : -1}
+          aria-disabled={disabled}
         >
-          {children}
-        </button>
+          {ButtonEl}
+        </span>
       </Tooltip.Trigger>
-      <Tooltip.Content
-        sideOffset={8}
-        className="rounded-md border border-[var(--gray-a6)] bg-[var(--color-panel)] px-2 py-1 text-xs text-[var(--gray-12)] shadow"
-      >
-        {tooltip}
-        <Tooltip.Arrow className="fill-[var(--gray-a6)]" />
-      </Tooltip.Content>
+
+      <Tooltip.Portal>
+        <Tooltip.Content
+          sideOffset={8}
+          className="z-[70] rounded-md border border-[var(--gray-a6)] bg-[var(--surface-1)] px-2 py-1 text-xs text-[var(--gray-12)] shadow"
+        >
+          {tooltip}
+          <Tooltip.Arrow className="fill-[var(--gray-a6)]" />
+        </Tooltip.Content>
+      </Tooltip.Portal>
     </Tooltip.Root>
   );
 }
 
-/* Accessible divider visible in light & dark */
 function Divider() {
-  return <div aria-hidden className="mx-1 h-6 w-px bg-neutral-300 dark:bg-neutral-500/90" />;
+  return <div aria-hidden className="mx-1 h-6 w-px bg-[var(--gray-a6)]" />;
 }

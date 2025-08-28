@@ -8,4 +8,10 @@ wheels/
 
 # Virtual environments
 .venv
+
+# .gitignore
+# env files
 .env
+.env.*
+**/.env
+**/.env.*

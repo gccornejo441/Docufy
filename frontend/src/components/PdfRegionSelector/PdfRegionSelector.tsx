@@ -190,9 +190,9 @@ export default function PdfRegionSelector({
 
   const doExtract = useCallback(async () => {
     if (!rect) return;
-    const r = await extract(rect, pageNumber, scale);
+    const r = await extract(rect, pageNumber, scale, rotation);
     if (r && onResult) onResult(r);
-  }, [rect, extract, pageNumber, scale, onResult]);
+  }, [rect, extract, pageNumber, scale, rotation, onResult]);
 
   return (
     <div className="h-full flex flex-col">
@@ -273,7 +273,7 @@ export default function PdfRegionSelector({
             error={error}
             result={result || null}
             onCopy={() => {
-              if (result?.text) navigator.clipboard.writeText(result.text).catch(() => {});
+              if (result?.text) navigator.clipboard.writeText(result.text).catch(() => { });
             }}
           >
             {children}
@@ -317,7 +317,7 @@ export default function PdfRegionSelector({
                 error={error}
                 result={result || null}
                 onCopy={() => {
-                  if (result?.text) navigator.clipboard.writeText(result.text).catch(() => {});
+                  if (result?.text) navigator.clipboard.writeText(result.text).catch(() => { });
                 }}
               >
                 {children}
