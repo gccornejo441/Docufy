@@ -110,7 +110,6 @@ export default function Toolbar({
           "grid grid-cols-[1fr_auto] items-center gap-2",
           "rounded-lg border border-[var(--gray-a6)]",
           "bg-[var(--surface-1)] px-2 py-1.5",
-          "shadow-sm",
         ].join(" ")}
       >
         {/* LEFT: scrollable controls */}
@@ -228,7 +227,7 @@ export default function Toolbar({
                   className={[
                     "inline-flex items-center justify-center gap-2 whitespace-nowrap flex-none rounded-md px-3 py-2 text-sm font-medium",
                     "border border-[var(--gray-a6)]",
-                    "bg-[var(--btn-secondary-bg)] hover:bg-[var(--btn-secondary-bg-hover)] text-[var(--btn-secondary-fg)]",
+                    "bg-[var(--btn-primary-bg)] hover:bg-[var(--btn-primary-bg-hover)] text-[var(--btn-primary-fg)]",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]",
                     "disabled:opacity-60 disabled:cursor-not-allowed disabled:pointer-events-none",
                     "transition-[background,transform] active:translate-y-[0.5px]",

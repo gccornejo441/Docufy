@@ -26,16 +26,34 @@ export default function Dropzone({
     ? `Selected: ${file.name} (${prettyBytes(file.size)})`
     : "Drag & Drop PDF here or Click to Upload";
 
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onBrowseClick();
+    }
+  };
+
   return (
     <div
       role="region"
       aria-label="PDF dropzone"
+      aria-live="polite"
+      tabIndex={0}
+      onKeyDown={onKeyDown}
+      onClick={onBrowseClick}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
-      className={`rounded-2xl border-2 border-dashed p-10 text-center shadow-sm
-        bg-[var(--color-panel-solid)]
-        ${dragActive ? "border-[var(--mint-8)]" : "border-[var(--gray-a7)]"}`}
+      className={[
+        "group relative cursor-pointer rounded-2xl border-2 border-dashed p-10 text-center shadow-sm",
+        "bg-[var(--surface-1)]",
+        dragActive
+          ? "border-[var(--btn-primary-bg)]"
+          : "border-[var(--gray-a7)]",
+        // Focus ring that matches your theme + visible on any surface
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]",
+        "focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-1)]",
+      ].join(" ")}
     >
       <input
         ref={inputRef}
@@ -50,15 +68,29 @@ export default function Dropzone({
 
       <div className="flex gap-3 justify-center">
         <button
-          onClick={onBrowseClick}
+          onClick={(e) => { e.stopPropagation(); onBrowseClick(); }}
           type="button"
-          className="px-4 py-2 rounded bg-[var(--gray-5)] text-[var(--gray-12)]
-                     hover:bg-[var(--gray-6)] focus:outline-none
-                     focus:ring-2 focus:ring-[var(--mint-9)]"
+          className={[
+            "px-4 py-2 rounded-md font-medium",
+            "border border-[var(--gray-a6)]",
+            "bg-[var(--btn-primary-bg)] hover:bg-[var(--btn-primary-bg-hover)] text-[var(--btn-primary-fg)]",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]",
+            "focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-1)]",
+            "transition-[background,transform] active:translate-y-[0.5px]",
+          ].join(" ")}
         >
           Choose File
         </button>
       </div>
+
+      {/* Optional subtle highlight on drag */}
+      {dragActive && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-2xl
+                     ring-2 ring-[var(--focus-ring)]/40"
+        />
+      )}
     </div>
   );
 }

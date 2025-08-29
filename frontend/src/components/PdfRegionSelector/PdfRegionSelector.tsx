@@ -12,6 +12,7 @@ import SelectionOverlay from "./ui/SelectionOverlay";
 import ResultPanel from "./ui/ResultPanel";
 
 import type { ViewportSize } from "./types";
+import { useTheme } from "../../provider/useTheme";
 
 export interface PdfRegionSelectorProps {
   fileUrl: string;
@@ -62,6 +63,8 @@ export default function PdfRegionSelector({
   const didFirstFit = useRef(false);
   const [visible, setVisible] = useState(false);
   const [mobileResultsOpen, setMobileResultsOpen] = useState(false);
+
+  const { theme } = useTheme();
 
   const getAvailableBox = useCallback(() => {
     const el = scrollRef.current;
@@ -131,7 +134,6 @@ export default function PdfRegionSelector({
   }, []);
   const resetRotation = useCallback(() => setRotation(0), []);
 
-  // initial fit
   useEffect(() => {
     if (!pdf || didFirstFit.current) return;
     let cancelled = false;
@@ -160,6 +162,25 @@ export default function PdfRegionSelector({
       scrollRef.current?.scrollTo({ top: 0, left: 0 });
     })();
   }, [rotation, pdf, fitMode, computeScaleForMode, isRendering, setRect]);
+
+  useEffect(() => {
+    if (!pdf || fitMode == null) return;
+    let cleanup: (() => void) | undefined;
+    const recompute = async () => {
+      const next = await computeScaleForMode(fitMode);
+      setScale((prev) => (Math.abs(prev - next) >= EPS ? next : prev));
+    };
+
+    void recompute();
+
+    if (typeof window !== "undefined" && theme === "system") {
+      const mql = window.matchMedia("(prefers-color-scheme: dark)");
+      const onChange = () => void recompute();
+      mql.addEventListener("change", onChange);
+      cleanup = () => mql.removeEventListener("change", onChange);
+    }
+    return cleanup;
+  }, [theme, pdf, fitMode, computeScaleForMode]);
 
   useEffect(() => {
     if (!pdf || !didFirstFit.current || fitMode == null || !scrollRef.current) return;
@@ -196,13 +217,12 @@ export default function PdfRegionSelector({
 
   return (
     <div className="h-full flex flex-col">
+      {/* Sticky header bar: flat corners, subtle separation */}
       <div
         className={[
-          "sticky top-0 z-20",
+          "sticky top-0 z-20 mb-2",
           "backdrop-blur supports-[backdrop-filter]:backdrop-blur-md",
-          "bg-white/90 dark:bg-neutral-900/90",
-          "border-b border-neutral-200 dark:border-neutral-700",
-          "shadow-sm",
+          "bg-[var(--surface-1)]"
         ].join(" ")}
       >
         <Toolbar
@@ -230,7 +250,7 @@ export default function PdfRegionSelector({
       <div className="flex-1 grid gap-3 min-[957px]:grid-cols-[1fr_minmax(280px,36%)]">
         <div className="flex-1 min-w-0 flex flex-col">
           <div
-            className="relative rounded border bg-[var(--color-panel-solid)] flex-1"
+            className="relative rounded-lg border border-[var(--gray-a6)] bg-[var(--surface-1)] shadow-sm flex-1"
             style={{ width: "100%" }}
           >
             <div
@@ -261,7 +281,7 @@ export default function PdfRegionSelector({
               </div>
             </div>
             {isRendering && (
-              <div className="absolute bottom-2 right-2 text-xs px-2 py-1 rounded bg-black/60 text-white">
+              <div className="absolute bottom-2 right-2 text-xs px-2 py-1 rounded-md bg-[var(--gray-a12)] text-[var(--gray-1)]">
                 Rendering…
               </div>
             )}
@@ -281,35 +301,38 @@ export default function PdfRegionSelector({
         </div>
       </div>
 
+      {/* Floating “Results” button on mobile */}
       <button
         type="button"
         onClick={() => setMobileResultsOpen(true)}
         className={[
           "fixed right-3 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-20",
           "inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold shadow-lg",
-          "bg-[var(--mint-9)] text-[var(--gray-1)] ring-1 ring-[var(--mint-a6)]",
-          "hover:bg-[var(--mint-10)] active:translate-y-[0.5px]",
+          "bg-[var(--btn-primary-bg)] text-[var(--btn-primary-fg)] ring-1 ring-[var(--indigo-a6)]",
+          "hover:bg-[var(--btn-primary-bg-hover)] active:translate-y-[0.5px]",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]",
+          "focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-1)]",
           "min-[957px]:hidden",
         ].join(" ")}
         aria-label="Open results"
       >
         Results
         {result?.text && (
-          <span className="ml-0.5 rounded-full bg-white/90 text-[var(--mint-11)] px-1 text-[10px] leading-4">
+          <span className="ml-0.5 rounded-full px-1 text-[10px] leading-4 bg-[var(--gray-a3)] text-[var(--indigo-11)]">
             new
           </span>
         )}
       </button>
 
+      {/* Mobile results drawer */}
       <Dialog.Root open={mobileResultsOpen} onOpenChange={setMobileResultsOpen}>
         <Dialog.Portal>
-          <Dialog.Overlay className="min-[957px]:hidden fixed inset-0 z-30 bg-black/40 backdrop-blur-[2px]" />
+          <Dialog.Overlay className="min-[957px]:hidden fixed inset-0 z-30 bg-[var(--gray-a8)] backdrop-blur-[2px]" />
           <Dialog.Content
             className={[
               "min-[957px]:hidden fixed inset-x-0 bottom-0 z-40",
-              "h-[72vh] max-h-[85vh] rounded-t-2xl border",
-              "bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-50",
-              "border-neutral-200 dark:border-neutral-700 shadow-2xl flex flex-col",
+              "h-[72vh] max-h-[85vh] rounded-t-2xl border border-[var(--gray-a6)]",
+              "bg-[var(--surface-1)] text-[var(--gray-12)] shadow-2xl flex flex-col",
             ].join(" ")}
           >
             <div className="flex-1 min-h-0 overflow-auto">
@@ -323,7 +346,11 @@ export default function PdfRegionSelector({
                 {children}
               </ResultPanel>
             </div>
-            <Dialog.Close className="m-2 rounded bg-neutral-200 dark:bg-neutral-700 px-3 py-1 text-sm">
+            <Dialog.Close
+              className="m-2 rounded-md bg-[var(--gray-4)] hover:bg-[var(--gray-5)] px-3 py-1 text-sm text-[var(--gray-12)]
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]
+                         focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-1)]"
+            >
               Close
             </Dialog.Close>
           </Dialog.Content>

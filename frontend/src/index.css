@@ -3,11 +3,11 @@
 
 :root {
   --surface-1: var(--color-panel, #fff);
-  --focus-ring: var(--mint-9);
+  --focus-ring: var(--indigo-9);
 
-  --btn-primary-bg: var(--mint-9);
-  --btn-primary-bg-hover: var(--mint-10);
-  --btn-primary-fg: #000000;
+  --btn-primary-bg: var(--indigo-9);
+  --btn-primary-bg-hover: var(--indigo-10);
+  --btn-primary-fg: #ffffff;
 
   --btn-secondary-bg: var(--gray-4);
   --btn-secondary-bg-hover: var(--gray-5);
@@ -17,7 +17,7 @@
   --btn-settings-bg-hover: var(--gray-4);
   --btn-settings-fg: var(--gray-12);
 
-  --btn-primary-bg-hc: var(--mint-11);
+  --btn-primary-bg-hc: var(--indigo-11);
   --btn-primary-fg-hc: #ffffff;
 
   --btn-secondary-bg-hc: var(--gray-1);
@@ -30,11 +30,11 @@
 :root.dark,
 :root[data-theme="dark"] {
   --surface-1: var(--color-panel, #0a0a0a);
-  --focus-ring: var(--mint-9);
+  --focus-ring: var(--indigo-9);
 
-  --btn-primary-bg: var(--mint-9);
-  --btn-primary-bg-hover: var(--mint-10);
-  --btn-primary-fg: var(--gray-12);
+  --btn-primary-bg: var(--indigo-9);
+  --btn-primary-bg-hover: var(--indigo-10);
+  --btn-primary-fg: #ffffff;
 
   --btn-secondary-bg: var(--gray-3);
   --btn-secondary-bg-hover: var(--gray-4);
@@ -44,7 +44,7 @@
   --btn-settings-bg-hover: var(--gray-3);
   --btn-settings-fg: var(--gray-12);
 
-  --btn-primary-bg-hc: var(--mint-11);
+  --btn-primary-bg-hc: var(--indigo-11);
   --btn-primary-fg-hc: #ffffff;
 
   --btn-secondary-bg-hc: var(--gray-1);
@@ -54,10 +54,57 @@
   --btn-settings-fg-hc: var(--gray-12);
 }
 
-/* Help the UA choose correct default colors (inputs, etc.) */
-:root { color-scheme: light; }
-:root.dark, :root[data-theme="dark"] { color-scheme: dark; }
+:root {
+  color-scheme: light;
+}
+:root.dark,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--gray-a8) transparent;
+}
+
+/* Chromium / WebKit (Chrome, Edge, Safari) */
+*::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--gray-a8);
+  border-radius: 9999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-a9);
+}
+*::-webkit-scrollbar-thumb:active {
+  background: var(--gray-a10);
+}
 
 @media (forced-colors: active) {
-  :root { --focus-ring: CanvasText; }
+  * {
+    scrollbar-color: auto;
+  }
+}
+
+@media (forced-colors: active) {
+  :root {
+    --focus-ring: CanvasText;
+  }
+}
+
+@media (forced-colors: active) {
+  .selection-box {
+    border-color: CanvasText !important;
+    background: transparent !important;
+    outline: 2px solid CanvasText;
+    outline-offset: -2px;
+  }
 }

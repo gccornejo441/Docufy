@@ -40,8 +40,7 @@ export default function DocumentViewerDialog({
           className="
             fixed inset-0 transition-opacity duration-200
             data-[state=open]:opacity-100 data-[state=closed]:opacity-0
-            bg-black/40 dark:bg-black/55
-            backdrop-blur-[2px]
+            bg-[var(--gray-a8)] backdrop-blur-[2px]
           "
         />
         <Dialog.Content
@@ -56,6 +55,8 @@ export default function DocumentViewerDialog({
             "transition-[opacity,transform] duration-200",
             "data-[state=open]:opacity-100 data-[state=closed]:opacity-0",
             "data-[state=open]:scale-100 data-[state=closed]:scale-95",
+            "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]",
+            "focus-visible:ring-offset-4 focus-visible:ring-offset-[var(--surface-1)]",
           ].join(" ")}
         >
           <div
@@ -79,14 +80,14 @@ export default function DocumentViewerDialog({
               <button
                 type="button"
                 onClick={toggleFullscreen}
-                className="px-2 py-1 rounded border border-[var(--gray-a6)] bg-[var(--gray-2)] hover:bg-[var(--gray-3)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)] text-sm"
+                className="px-2 py-1 rounded border border-[var(--gray-a6)] bg-[var(--gray-2)] hover:bg-[var(--gray-3)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)] focus:ring-offset-2 focus:ring-offset-[var(--surface-1)] text-sm"
                 aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
                 title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
               >
                 {isFullscreen ? "⤢" : "⤡"}
               </button>
               <Dialog.Close
-                className="px-3 py-1 rounded border border-[var(--gray-a6)] bg-[var(--gray-2)] hover:bg-[var(--gray-3)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)] text-sm"
+                className="px-3 py-1 rounded border border-[var(--gray-a6)] bg-[var(--gray-2)] hover:bg-[var(--gray-3)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)] focus:ring-offset-2 focus:ring-offset-[var(--surface-1)] text-sm"
                 aria-label="Close"
               >
                 Close
