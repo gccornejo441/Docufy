@@ -4,6 +4,8 @@
 :root {
   --surface-1: var(--color-panel, #fff);
   --focus-ring: var(--indigo-9);
+  --focus-ring-a-soft: var(--indigo-a4);
+  --focus-ring-a-strong: var(--indigo-a6);
 
   --btn-primary-bg: var(--indigo-9);
   --btn-primary-bg-hover: var(--indigo-10);
@@ -31,6 +33,8 @@
 :root[data-theme="dark"] {
   --surface-1: var(--color-panel, #0a0a0a);
   --focus-ring: var(--indigo-9);
+  --focus-ring-a-soft: var(--indigo-a4);
+  --focus-ring-a-strong: var(--indigo-a6);
 
   --btn-primary-bg: var(--indigo-9);
   --btn-primary-bg-hover: var(--indigo-10);

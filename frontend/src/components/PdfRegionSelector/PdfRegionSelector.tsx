@@ -217,7 +217,6 @@ export default function PdfRegionSelector({
 
   return (
     <div className="h-full flex flex-col">
-      {/* Sticky header bar: flat corners, subtle separation */}
       <div
         className={[
           "sticky top-0 z-20 mb-2",
@@ -301,7 +300,6 @@ export default function PdfRegionSelector({
         </div>
       </div>
 
-      {/* Floating “Results” button on mobile */}
       <button
         type="button"
         onClick={() => setMobileResultsOpen(true)}
