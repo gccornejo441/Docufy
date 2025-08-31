@@ -11,6 +11,9 @@ import DocumentViewerDialog from "./components/DocumentViewerDialog";
 import PdfRegionSelector from "./components/PdfRegionSelector/PdfRegionSelector";
 import Button from "./components/ui/Button";
 
+import ConnectionsDialog from "./components/ConnectionsDialog";
+import { useSharePointAuth } from "./auth/useSharePointAuth";
+
 const APP_TITLE = import.meta.env.VITE_APP_TITLE || "Docufy";
 
 export default function App() {
@@ -18,7 +21,19 @@ export default function App() {
   const [toastOpen, setToastOpen] = React.useState(false);
   const [viewerOpen, setViewerOpen] = React.useState(false);
   const [resultsOpen, setResultsOpen] = React.useState(false);
-  const [running, setRunning] = React.useState(false); // local busy flag for OCR run
+  const [running, setRunning] = React.useState(false);
+
+  // Connections
+  const [connectionsOpen, setConnectionsOpen] = React.useState(false);
+  const [connectedSP, setConnectedSP] = React.useState(false);
+
+  // SharePoint import dialog
+  const [spOpen, setSpOpen] = React.useState(false);
+  const [spUrl, setSpUrl] = React.useState("");
+  const [spBusy, setSpBusy] = React.useState(false);
+  const [spError, setSpError] = React.useState<string | null>(null);
+
+  const { signInIfNeeded, getApiToken } = useSharePointAuth();
   const showError = Boolean(ocr.error);
 
   // Normalize API base
@@ -48,7 +63,6 @@ export default function App() {
   const hasText = Boolean(ocr.text && ocr.text.trim().length);
   const currentStep = !ocr.file ? 1 : hasText ? 3 : 2;
 
-  // Auto-open the results dialog when text first becomes available
   const prevHasText = React.useRef(false);
   React.useEffect(() => {
     if (!prevHasText.current && hasText) {
@@ -87,6 +101,92 @@ export default function App() {
     }
   }, [ocr]);
 
+  const openConnections = React.useCallback(async () => {
+    setConnectionsOpen(true);
+    try {
+      await signInIfNeeded();
+      const token = await getApiToken();
+      const res = await fetch(`${apiBase}/api/connectors/sharepoint/status`, {
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setConnectedSP(Boolean(json?.connected));
+      }
+    } catch {
+      // ignore
+    }
+  }, [apiBase, getApiToken, signInIfNeeded]);
+
+  const connectSharePoint = React.useCallback(async () => {
+    const token = await getApiToken();
+    const res = await fetch(`${apiBase}/api/connectors/sharepoint/connect`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error("Connect failed");
+    setConnectedSP(true);
+  }, [apiBase, getApiToken]);
+
+  const disconnectSharePoint = React.useCallback(async () => {
+    const token = await getApiToken();
+    const res = await fetch(`${apiBase}/api/connectors/sharepoint/disconnect`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error("Disconnect failed");
+    setConnectedSP(false);
+  }, [apiBase, getApiToken]);
+
+  const handleSharePointImport = React.useCallback(
+    async (e?: React.FormEvent) => {
+      e?.preventDefault();
+      setSpError(null);
+      if (!spUrl.trim()) {
+        setSpError("Paste a SharePoint or OneDrive link.");
+        return;
+      }
+      try {
+        setSpBusy(true);
+        await signInIfNeeded();
+        const apiToken = await getApiToken();
+        const resp = await fetch(`${apiBase || ""}/api/import/sharepoint`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiToken}`,
+          },
+          credentials: "include",
+          body: JSON.stringify({ shareUrl: spUrl.trim() }),
+        });
+        if (!resp.ok) throw new Error(`Import failed (HTTP ${resp.status})`);
+        const blob = await resp.blob();
+        const type = blob.type || "application/pdf";
+        const fallbackName = (() => {
+          try {
+            const u = new URL(spUrl);
+            const last = u.pathname.split("/").filter(Boolean).pop() || "import.pdf";
+            return last.toLowerCase().endsWith(".pdf") ? last : `${last}.pdf`;
+          } catch {
+            return "import.pdf";
+          }
+        })();
+        const file = new File([blob], fallbackName, { type });
+        ocr.setFile?.(file);
+        setSpOpen(false);
+      } catch (err) {
+        setSpError("Could not import file. Check the link, your permissions, or server logs.");
+        console.error(err);
+      } finally {
+        setSpBusy(false);
+      }
+    },
+    [apiBase, getApiToken, ocr, signInIfNeeded, spUrl]
+  );
+
   return (
     <div className="min-h-screen flex flex-col items-center p-6 bg-[var(--color-background)] text-[color:var(--gray-12)]">
       {/* Skip link */}
@@ -113,7 +213,7 @@ export default function App() {
           <div>
             <h1 className="text-2xl font-semibold">{APP_TITLE}</h1>
             <p className="text-[color:var(--gray-11)]">
-              Upload a scanned PDF.  We extract the text instantly.
+              Upload a scanned PDF. We extract the text instantly.
             </p>
           </div>
         </div>
@@ -137,6 +237,14 @@ export default function App() {
           isUploading={ocr.isUploading || running}
           isDocReady={!!ocr.file}
           onOpenDoc={() => setViewerOpen(true)}
+          onImportFromSharePoint={() => {
+            if (!connectedSP) {
+              openConnections();
+            } else {
+              setSpOpen(true);
+            }
+          }}
+          onManageConnections={openConnections}
         />
 
         {/* Primary CTA: Dropzone */}
@@ -171,11 +279,7 @@ export default function App() {
               >
                 1
               </span>
-              <span
-                className={
-                  currentStep === 1 ? "font-medium text-[color:var(--gray-12)]" : ""
-                }
-              >
+              <span className={currentStep === 1 ? "font-medium text-[color:var(--gray-12)]" : ""}>
                 Add PDF
               </span>
             </li>
@@ -197,11 +301,7 @@ export default function App() {
               >
                 2
               </span>
-              <span
-                className={
-                  currentStep === 2 ? "font-medium text-[color:var(--gray-12)]" : ""
-                }
-              >
+              <span className={currentStep === 2 ? "font-medium text-[color:var(--gray-12)]" : ""}>
                 Run OCR
               </span>
             </li>
@@ -223,18 +323,14 @@ export default function App() {
               >
                 3
               </span>
-              <span
-                className={
-                  currentStep === 3 ? "font-medium text-[color:var(--gray-12)]" : ""
-                }
-              >
+              <span className={currentStep === 3 ? "font-medium text-[color:var(--gray-12)]" : ""}>
                 Review &amp; Export
               </span>
             </li>
           </ol>
         </nav>
 
-        {/* View Results button (opens dialog) */}
+        {/* View Results button */}
         <div className="w-full flex justify-end">
           <Button
             variant="primary"
@@ -245,7 +341,6 @@ export default function App() {
           >
             View Results
           </Button>
-          {/* Live region: announces readiness for AT users */}
           <span className="sr-only" role="status" aria-live="polite">
             {hasText ? "OCR complete. Results are ready." : ""}
           </span>
@@ -353,6 +448,70 @@ export default function App() {
           disabled={!ocr.file}
           titleWhenDisabled="/make-searchable endpoint not available yet"
         />
+      </DocumentViewerDialog>
+
+      {/* Connections dialog */}
+      <ConnectionsDialog
+        open={connectionsOpen}
+        onOpenChange={setConnectionsOpen}
+        connected={{ sharepoint: connectedSP }}
+        onConnectSharePoint={connectSharePoint}
+        onDisconnectSharePoint={disconnectSharePoint}
+      />
+
+      {/* Import from SharePoint dialog */}
+      <DocumentViewerDialog
+        open={spOpen}
+        onOpenChange={setSpOpen}
+        title="Import from SharePoint"
+      >
+        <form
+          onSubmit={handleSharePointImport}
+          className="flex flex-col gap-3"
+          aria-describedby="sp-help"
+        >
+          <label htmlFor="sp-url" className="text-sm font-medium">
+            Share link
+          </label>
+          <input
+            id="sp-url"
+            type="url"
+            required
+            placeholder="Paste a SharePoint or OneDrive link…"
+            value={spUrl}
+            onChange={(e) => setSpUrl(e.target.value)}
+            className="w-full rounded-md border px-3 py-2
+                       bg-[var(--surface-1)] text-[color:var(--gray-12)]
+                       border-[color:var(--gray-a6)]
+                       focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]
+                       focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-1)]"
+          />
+          <p id="sp-help" className="text-xs text-[color:var(--gray-11)]">
+            We’ll fetch this file server-side using your organization’s permissions.
+          </p>
+
+          {spError && (
+            <div
+              role="alert"
+              className="text-sm text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded px-2 py-1"
+            >
+              {spError}
+            </div>
+          )}
+
+          <div className="mt-2 flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setSpOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" disabled={spBusy}>
+              {spBusy ? "Importing…" : "Import"}
+            </Button>
+          </div>
+
+          <span className="sr-only" role="status" aria-live="polite">
+            {spBusy ? "Importing from SharePoint…" : ""}
+          </span>
+        </form>
       </DocumentViewerDialog>
     </div>
   );

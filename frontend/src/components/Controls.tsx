@@ -1,11 +1,13 @@
 import React from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { MoreVertical, Settings, RotateCcw, Sun, Moon, Monitor, Check } from "lucide-react";
+import { MoreVertical, Settings, RotateCcw, Sun, Moon, Monitor, Check, Plug } from "lucide-react";
 import Button from "./ui/Button";
 import { useTheme } from "../provider/useTheme";
 import type { Theme } from "../provider/theme.types";
 import DpiSettings from "./dpi/DpiSettings";
+import ImportConnectorsMenu from "./connectors/ImportConnectorsMenu";
+import type { ConnectorDescriptor } from "../types/connectors";
 
 interface ControlsProps {
   onReset: () => void;
@@ -15,8 +17,9 @@ interface ControlsProps {
   onOpenDoc: () => void;
   dpi?: number;
   onChangeDpi?: (dpi: number) => void;
-  /** When false, hides action buttons pre-upload (settings remain visible). Defaults to true. */
   showActions?: boolean;
+  onImportFromSharePoint?: () => void;
+  onManageConnections?: () => void;
 }
 
 export default function Controls({
@@ -28,9 +31,24 @@ export default function Controls({
   dpi: dpiProp,
   onChangeDpi,
   showActions = true,
+  onImportFromSharePoint,
+  onManageConnections,
 }: ControlsProps) {
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const { theme, setTheme } = useTheme();
+
+  const connectors = React.useMemo<ConnectorDescriptor[]>(() => {
+    const list: ConnectorDescriptor[] = [];
+    if (onImportFromSharePoint) {
+      list.push({
+        id: "sharepoint",
+        label: "Import from SharePoint",
+        iconSrc: "/sharepoint.svg",
+        onSelect: onImportFromSharePoint,
+      });
+    }
+    return list;
+  }, [onImportFromSharePoint]);
 
   const menuItemBase =
     "group px-3 py-2 text-sm rounded-md outline-none cursor-pointer flex items-center gap-2 " +
@@ -41,7 +59,6 @@ export default function Controls({
 
   return (
     <section className="flex flex-wrap gap-4 items-end w-full">
-      {/* Left: primary actions — can be hidden pre-upload to keep "Choose PDF" as sole CTA */}
       {showActions ? (
         <div className="flex gap-3 items-center">
           <Button
@@ -59,34 +76,24 @@ export default function Controls({
             onClick={onRun}
             disabled={!isDocReady || isUploading}
             aria-disabled={!isDocReady || isUploading}
-            title={
-              !isDocReady ? "Upload a PDF first" : isUploading ? "Processing…" : "Run OCR"
-            }
+            title={!isDocReady ? "Upload a PDF first" : isUploading ? "Processing…" : "Run OCR"}
           >
             {isUploading ? "Processing…" : "Run OCR"}
           </Button>
 
-          <Button
-            variant="secondary"
-            onClick={onReset}
-            title="Reset"
-          >
+          <Button variant="secondary" onClick={onReset} title="Reset">
             Reset
           </Button>
 
-          {/* SR-only hints for disabled reasons */}
           <span id="hint-upload-first" className="sr-only">
             Upload a PDF before running OCR or opening the viewer.
           </span>
         </div>
       ) : (
-        // Preserve layout height so the UI doesn't jump when actions appear later
         <div aria-hidden className="h-10" />
       )}
 
-      {/* Right: Settings menu — ALWAYS available */}
       <div className="ml-auto flex items-center gap-2">
-        {/* Advanced Settings Dialog (DPI, etc.) */}
         <Dialog.Root open={settingsOpen} onOpenChange={setSettingsOpen}>
           <Dialog.Portal>
             <Dialog.Overlay
@@ -117,7 +124,6 @@ export default function Controls({
           </Dialog.Portal>
         </Dialog.Root>
 
-        {/* Kebab Menu */}
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
             <button
@@ -126,7 +132,6 @@ export default function Controls({
                          focus:ring-offset-2 focus:ring-offset-[var(--surface-1)]"
               aria-label="More actions"
               aria-haspopup="menu"
-              aria-expanded={undefined}
             >
               <MoreVertical className="w-5 h-5 text-[var(--gray-12)]" />
             </button>
@@ -135,10 +140,32 @@ export default function Controls({
           <DropdownMenu.Portal>
             <DropdownMenu.Content
               align="end"
-              className="min-w-[220px] rounded-md border shadow-md
+              className="min-w-[240px] rounded-md border shadow-md
                          bg-[var(--surface-1)] text-[var(--gray-12)]
                          border-[var(--gray-a6)] p-1"
             >
+              {onManageConnections && (
+                <>
+                  <DropdownMenu.Label className="px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-[var(--gray-10)]">
+                    Connections
+                  </DropdownMenu.Label>
+                  <DropdownMenu.Item
+                    onSelect={() => onManageConnections()}
+                    className={menuItemBase}
+                  >
+                    <Plug className="w-4 h-4" />
+                    <span>Connect services…</span>
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Separator className="my-1 h-px bg-[var(--gray-a6)]" />
+                </>
+              )}
+
+              <ImportConnectorsMenu
+                connectors={connectors}
+                disabled={isUploading}
+                menuItemBase={menuItemBase}
+              />
+
               <DropdownMenu.Item
                 onSelect={() => setSettingsOpen(true)}
                 className={menuItemBase}
