@@ -13,6 +13,7 @@ import Button from "./components/ui/Button";
 
 import ConnectionsDialog from "./components/ConnectionsDialog";
 import { useSharePointAuth } from "./auth/useSharePointAuth";
+import SharePointBrowserDialog from "./components/SharePointBrowserDialog";
 
 const APP_TITLE = import.meta.env.VITE_APP_TITLE || "Docufy";
 
@@ -33,14 +34,14 @@ export default function App() {
   const [spBusy, setSpBusy] = React.useState(false);
   const [spError, setSpError] = React.useState<string | null>(null);
 
-  const { signInIfNeeded, getApiToken } = useSharePointAuth();
+  const [spBrowserOpen, setSpBrowserOpen] = React.useState(false);
+
+  const { ensureSignedIn, getApiToken } = useSharePointAuth();
   const showError = Boolean(ocr.error);
 
-  // Normalize API base
   const apiBase = React.useMemo(() => (API_BASE || "").replace(/\/$/, ""), []);
   const { status, statusCode, latencyMs, lastChecked, check } = useApiHealth(apiBase);
 
-  // Blob URL for the selected file
   const fileUrl = React.useMemo(
     () => (ocr.file ? URL.createObjectURL(ocr.file) : null),
     [ocr.file]
@@ -104,7 +105,8 @@ export default function App() {
   const openConnections = React.useCallback(async () => {
     setConnectionsOpen(true);
     try {
-      await signInIfNeeded();
+      const ok = await ensureSignedIn();
+      if (!ok) return;
       const token = await getApiToken();
       const res = await fetch(`${apiBase}/api/connectors/sharepoint/status`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -117,7 +119,8 @@ export default function App() {
     } catch {
       // ignore
     }
-  }, [apiBase, getApiToken, signInIfNeeded]);
+  }, [apiBase, ensureSignedIn, getApiToken]);
+
 
   const connectSharePoint = React.useCallback(async () => {
     const token = await getApiToken();
@@ -151,7 +154,7 @@ export default function App() {
       }
       try {
         setSpBusy(true);
-        await signInIfNeeded();
+        await ensureSignedIn();
         const apiToken = await getApiToken();
         const resp = await fetch(`${apiBase || ""}/api/import/sharepoint`, {
           method: "POST",
@@ -184,7 +187,7 @@ export default function App() {
         setSpBusy(false);
       }
     },
-    [apiBase, getApiToken, ocr, signInIfNeeded, spUrl]
+    [apiBase, getApiToken, ocr, ensureSignedIn, spUrl]
   );
 
   return (
@@ -237,14 +240,15 @@ export default function App() {
           isUploading={ocr.isUploading || running}
           isDocReady={!!ocr.file}
           onOpenDoc={() => setViewerOpen(true)}
-          onImportFromSharePoint={() => {
+          onImportFromSharePoint={async () => {
+            const ok = await ensureSignedIn();
+            if (!ok) return;
             if (!connectedSP) {
               openConnections();
             } else {
-              setSpOpen(true);
+              setSpBrowserOpen(true);
             }
           }}
-          onManageConnections={openConnections}
         />
 
         {/* Primary CTA: Dropzone */}
@@ -513,6 +517,18 @@ export default function App() {
           </span>
         </form>
       </DocumentViewerDialog>
+
+      <SharePointBrowserDialog
+        open={spBrowserOpen}
+        onOpenChange={setSpBrowserOpen}
+        apiBase={apiBase}
+        getApiToken={getApiToken}
+        onPick={(file /*, meta*/) => {
+          ocr.setFile?.(file);
+          setResultsOpen(false);
+        }}
+      />
+
     </div>
   );
 }

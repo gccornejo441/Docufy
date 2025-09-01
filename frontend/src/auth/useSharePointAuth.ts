@@ -1,30 +1,68 @@
 import { useMsal } from "@azure/msal-react";
-import { InteractionRequiredAuthError } from "@azure/msal-browser";
-import { apiScopes } from "./msal";
+import {
+  InteractionRequiredAuthError,
+  type AccountInfo,
+} from "@azure/msal-browser";
+
+const API_SCOPE =
+  (import.meta.env.VITE_API_SCOPE as string | undefined) ??
+  (import.meta.env.VITE_AZURE_API_SCOPE as string | undefined);
+
+const GRAPH_SCOPES =
+  (import.meta.env.VITE_GRAPH_SCOPES as string | undefined)
+    ?.split(/[,\s]+/)
+    .filter(Boolean) ?? [];
+
+const REQUEST_SCOPES = API_SCOPE
+  ? [API_SCOPE]
+  : GRAPH_SCOPES.length
+  ? GRAPH_SCOPES
+  : ["User.Read"];
 
 export function useSharePointAuth() {
-  const { instance, accounts } = useMsal();
+  const { instance } = useMsal();
 
-  async function signInIfNeeded() {
-    if (!accounts[0]) {
-      await instance.loginPopup({ scopes: apiScopes });
+  const getAccount = (): AccountInfo | null => {
+    const active = instance.getActiveAccount();
+    if (active) return active;
+    const all = instance.getAllAccounts();
+    if (all.length) {
+      instance.setActiveAccount(all[0]);
+      return all[0];
     }
-  }
+    return null;
+  };
 
-  async function getApiToken() {
-    const account = accounts[0];
-    const req = { scopes: apiScopes, account };
+  const ensureSignedIn = async (): Promise<boolean> => {
+    const acct = getAccount();
+    if (acct) return true;
+    await instance.loginRedirect({
+      scopes: REQUEST_SCOPES,
+      prompt: "select_account",
+    });
+    return false;
+  };
+
+  const getApiToken = async (): Promise<string> => {
+    const account = getAccount();
+    if (!account) throw new Error("No active account");
     try {
-      const res = await instance.acquireTokenSilent(req);
+      const res = await instance.acquireTokenSilent({
+        account,
+        scopes: REQUEST_SCOPES,
+      });
       return res.accessToken;
     } catch (e) {
       if (e instanceof InteractionRequiredAuthError) {
-        const res = await instance.acquireTokenPopup(req);
-        return res.accessToken;
+        await instance.acquireTokenRedirect({
+          account,
+          scopes: REQUEST_SCOPES,
+        });
+        return "";
       }
       throw e;
     }
-  }
+  };
 
-  return { signInIfNeeded, getApiToken };
+  return { ensureSignedIn, getApiToken };
 }

@@ -8,9 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 import shutil
 import logging, sys
-import fitz  # PyMuPDF
+import fitz
 
 from docufy_ocr import __version__ as docuocr_version, DocuOCR
+from .sharepoint import router as sharepoint_router
 
 # ---------- logging setup ----------
 logger = logging.getLogger("docuocr.api")
@@ -23,6 +24,7 @@ logger.propagate = False
 # -----------------------------------
 
 app = FastAPI(title="DocuOCR Text Extraction API", version="1.0.0")
+app.include_router(sharepoint_router, prefix="/api")
 
 origins = [
     "http://localhost:5173",
@@ -36,7 +38,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 def _make_ocr(dpi: Optional[int] = None, lang: Optional[str] = None) -> DocuOCR:
     kwargs = {}
