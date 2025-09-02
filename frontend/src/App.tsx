@@ -11,10 +11,6 @@ import DocumentViewerDialog from "./components/DocumentViewerDialog";
 import PdfRegionSelector from "./components/PdfRegionSelector/PdfRegionSelector";
 import Button from "./components/ui/Button";
 
-import ConnectionsDialog from "./components/ConnectionsDialog";
-import { useSharePointAuth } from "./auth/useSharePointAuth";
-import SharePointBrowserDialog from "./components/SharePointBrowserDialog";
-
 const APP_TITLE = import.meta.env.VITE_APP_TITLE || "Docufy";
 
 export default function App() {
@@ -24,21 +20,7 @@ export default function App() {
   const [resultsOpen, setResultsOpen] = React.useState(false);
   const [running, setRunning] = React.useState(false);
 
-  // Connections
-  const [connectionsOpen, setConnectionsOpen] = React.useState(false);
-  const [connectedSP, setConnectedSP] = React.useState(false);
-
-  // SharePoint import dialog
-  const [spOpen, setSpOpen] = React.useState(false);
-  const [spUrl, setSpUrl] = React.useState("");
-  const [spBusy, setSpBusy] = React.useState(false);
-  const [spError, setSpError] = React.useState<string | null>(null);
-
-  const [spBrowserOpen, setSpBrowserOpen] = React.useState(false);
-
-  const { ensureSignedIn, getApiToken } = useSharePointAuth();
   const showError = Boolean(ocr.error);
-
   const apiBase = React.useMemo(() => (API_BASE || "").replace(/\/$/, ""), []);
   const { status, statusCode, latencyMs, lastChecked, check } = useApiHealth(apiBase);
 
@@ -102,94 +84,6 @@ export default function App() {
     }
   }, [ocr]);
 
-  const openConnections = React.useCallback(async () => {
-    setConnectionsOpen(true);
-    try {
-      const ok = await ensureSignedIn();
-      if (!ok) return;
-      const token = await getApiToken();
-      const res = await fetch(`${apiBase}/api/connectors/sharepoint/status`, {
-        headers: { Authorization: `Bearer ${token}` },
-        credentials: "include",
-      });
-      if (res.ok) {
-        const json = await res.json();
-        setConnectedSP(Boolean(json?.connected));
-      }
-    } catch {
-      // ignore
-    }
-  }, [apiBase, ensureSignedIn, getApiToken]);
-
-
-  const connectSharePoint = React.useCallback(async () => {
-    const token = await getApiToken();
-    const res = await fetch(`${apiBase}/api/connectors/sharepoint/connect`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      credentials: "include",
-    });
-    if (!res.ok) throw new Error("Connect failed");
-    setConnectedSP(true);
-  }, [apiBase, getApiToken]);
-
-  const disconnectSharePoint = React.useCallback(async () => {
-    const token = await getApiToken();
-    const res = await fetch(`${apiBase}/api/connectors/sharepoint/disconnect`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      credentials: "include",
-    });
-    if (!res.ok) throw new Error("Disconnect failed");
-    setConnectedSP(false);
-  }, [apiBase, getApiToken]);
-
-  const handleSharePointImport = React.useCallback(
-    async (e?: React.FormEvent) => {
-      e?.preventDefault();
-      setSpError(null);
-      if (!spUrl.trim()) {
-        setSpError("Paste a SharePoint or OneDrive link.");
-        return;
-      }
-      try {
-        setSpBusy(true);
-        await ensureSignedIn();
-        const apiToken = await getApiToken();
-        const resp = await fetch(`${apiBase || ""}/api/import/sharepoint`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiToken}`,
-          },
-          credentials: "include",
-          body: JSON.stringify({ shareUrl: spUrl.trim() }),
-        });
-        if (!resp.ok) throw new Error(`Import failed (HTTP ${resp.status})`);
-        const blob = await resp.blob();
-        const type = blob.type || "application/pdf";
-        const fallbackName = (() => {
-          try {
-            const u = new URL(spUrl);
-            const last = u.pathname.split("/").filter(Boolean).pop() || "import.pdf";
-            return last.toLowerCase().endsWith(".pdf") ? last : `${last}.pdf`;
-          } catch {
-            return "import.pdf";
-          }
-        })();
-        const file = new File([blob], fallbackName, { type });
-        ocr.setFile?.(file);
-        setSpOpen(false);
-      } catch (err) {
-        setSpError("Could not import file. Check the link, your permissions, or server logs.");
-        console.error(err);
-      } finally {
-        setSpBusy(false);
-      }
-    },
-    [apiBase, getApiToken, ocr, ensureSignedIn, spUrl]
-  );
-
   return (
     <div className="min-h-screen flex flex-col items-center p-6 bg-[var(--color-background)] text-[color:var(--gray-12)]">
       {/* Skip link */}
@@ -208,16 +102,10 @@ export default function App() {
       {/* Header */}
       <header className="w-full max-w-4xl mb-6">
         <div className="flex items-center gap-3">
-          <img
-            src="/docufy.svg"
-            alt={`${APP_TITLE} logo`}
-            className="h-8 w-8 shrink-0"
-          />
+          <img src="/docufy.svg" alt={`${APP_TITLE} logo`} className="h-8 w-8 shrink-0" />
           <div>
             <h1 className="text-2xl font-semibold">{APP_TITLE}</h1>
-            <p className="text-[color:var(--gray-11)]">
-              Upload a scanned PDF. We extract the text instantly.
-            </p>
+            <p className="text-[color:var(--gray-11)]">Upload a scanned PDF. We extract the text instantly.</p>
           </div>
         </div>
       </header>
@@ -240,15 +128,6 @@ export default function App() {
           isUploading={ocr.isUploading || running}
           isDocReady={!!ocr.file}
           onOpenDoc={() => setViewerOpen(true)}
-          onImportFromSharePoint={async () => {
-            const ok = await ensureSignedIn();
-            if (!ok) return;
-            if (!connectedSP) {
-              openConnections();
-            } else {
-              setSpBrowserOpen(true);
-            }
-          }}
         />
 
         {/* Primary CTA: Dropzone */}
@@ -269,10 +148,7 @@ export default function App() {
         >
           <ol className="flex items-center gap-3">
             {/* Step 1 */}
-            <li
-              aria-current={currentStep === 1 ? "step" : undefined}
-              className="flex items-center gap-2"
-            >
+            <li aria-current={currentStep === 1 ? "step" : undefined} className="flex items-center gap-2">
               <span
                 className={[
                   "h-6 w-6 rounded-full grid place-items-center border",
@@ -291,10 +167,7 @@ export default function App() {
             <span aria-hidden="true">→</span>
 
             {/* Step 2 */}
-            <li
-              aria-current={currentStep === 2 ? "step" : undefined}
-              className="flex items-center gap-2"
-            >
+            <li aria-current={currentStep === 2 ? "step" : undefined} className="flex items-center gap-2">
               <span
                 className={[
                   "h-6 w-6 rounded-full grid place-items-center border",
@@ -313,10 +186,7 @@ export default function App() {
             <span aria-hidden="true">→</span>
 
             {/* Step 3 */}
-            <li
-              aria-current={currentStep === 3 ? "step" : undefined}
-              className="flex items-center gap-2"
-            >
+            <li aria-current={currentStep === 3 ? "step" : undefined} className="flex items-center gap-2">
               <span
                 className={[
                   "h-6 w-6 rounded-full grid place-items-center border",
@@ -453,82 +323,6 @@ export default function App() {
           titleWhenDisabled="/make-searchable endpoint not available yet"
         />
       </DocumentViewerDialog>
-
-      {/* Connections dialog */}
-      <ConnectionsDialog
-        open={connectionsOpen}
-        onOpenChange={setConnectionsOpen}
-        connected={{ sharepoint: connectedSP }}
-        onConnectSharePoint={connectSharePoint}
-        onDisconnectSharePoint={disconnectSharePoint}
-      />
-
-      {/* Import from SharePoint dialog */}
-      <DocumentViewerDialog
-        open={spOpen}
-        onOpenChange={setSpOpen}
-        title="Import from SharePoint"
-      >
-        <form
-          onSubmit={handleSharePointImport}
-          className="flex flex-col gap-3"
-          aria-describedby="sp-help"
-        >
-          <label htmlFor="sp-url" className="text-sm font-medium">
-            Share link
-          </label>
-          <input
-            id="sp-url"
-            type="url"
-            required
-            placeholder="Paste a SharePoint or OneDrive link…"
-            value={spUrl}
-            onChange={(e) => setSpUrl(e.target.value)}
-            className="w-full rounded-md border px-3 py-2
-                       bg-[var(--surface-1)] text-[color:var(--gray-12)]
-                       border-[color:var(--gray-a6)]
-                       focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]
-                       focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-1)]"
-          />
-          <p id="sp-help" className="text-xs text-[color:var(--gray-11)]">
-            We’ll fetch this file server-side using your organization’s permissions.
-          </p>
-
-          {spError && (
-            <div
-              role="alert"
-              className="text-sm text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded px-2 py-1"
-            >
-              {spError}
-            </div>
-          )}
-
-          <div className="mt-2 flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={() => setSpOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="primary" disabled={spBusy}>
-              {spBusy ? "Importing…" : "Import"}
-            </Button>
-          </div>
-
-          <span className="sr-only" role="status" aria-live="polite">
-            {spBusy ? "Importing from SharePoint…" : ""}
-          </span>
-        </form>
-      </DocumentViewerDialog>
-
-      <SharePointBrowserDialog
-        open={spBrowserOpen}
-        onOpenChange={setSpBrowserOpen}
-        apiBase={apiBase}
-        getApiToken={getApiToken}
-        onPick={(file /*, meta*/) => {
-          ocr.setFile?.(file);
-          setResultsOpen(false);
-        }}
-      />
-
     </div>
   );
 }

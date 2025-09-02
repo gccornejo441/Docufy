@@ -1,3 +1,4 @@
+# sharepoint.py
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,7 +8,7 @@ import os
 import logging
 import base64
 import json
-from typing import Dict
+from typing import Dict, List, Any
 
 import httpx
 import msal
@@ -18,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/connectors/sharepoint", tags=["sharepoint"])
 
+# ---------------------------------------------------------------------------
+# Env / .env loading (optional)
+# ---------------------------------------------------------------------------
 try:
     from dotenv import load_dotenv
 
@@ -25,7 +29,6 @@ try:
     load_dotenv()
 except Exception:
     pass
-
 
 # ---------------------------------------------------------------------------
 # Azure AD / MSAL configuration
@@ -69,7 +72,7 @@ if not (TENANT_ID and CLIENT_ID and CLIENT_SECRET):
         "SharePoint OBO config incomplete. Check AZURE_AD_TENANT_ID/CLIENT_ID/CLIENT_SECRET."
     )
 
-# Use the app's own permissions to request a Graph token via OBO
+# OBO uses your API's delegated Graph permissions via .default
 GRAPH_SCOPES = ["https://graph.microsoft.com/.default"]
 
 _MSAL_CLIENT: msal.ConfidentialClientApplication | None = None
@@ -90,8 +93,7 @@ def get_msal_client() -> msal.ConfidentialClientApplication:
             logger.exception(
                 "Failed to initialize MSAL client with authority=%r", AUTHORITY
             )
-            raise HTTPException(
-                status_code=500, detail=f"MSAL init failed: {e}")
+            raise HTTPException(status_code=500, detail=f"MSAL init failed: {e}")
     return _MSAL_CLIENT
 
 
@@ -114,17 +116,12 @@ async def _get_graph_token_from_api_token(api_jwt: str) -> str:
     for a Graph access token using the app's confidential client.
     """
     app = get_msal_client()
-    result = app.acquire_token_on_behalf_of(
-        user_assertion=api_jwt, scopes=GRAPH_SCOPES
-    )
+    result = app.acquire_token_on_behalf_of(user_assertion=api_jwt, scopes=GRAPH_SCOPES)
     if "access_token" in result:
         return result["access_token"]
-    err = result.get("error_description") or result.get(
-        "error") or "unknown_error"
+    err = result.get("error_description") or result.get("error") or "unknown_error"
     logger.error("OBO for Graph failed: %s", err)
-    raise HTTPException(
-        status_code=401, detail="Could not acquire Graph token (OBO failed)"
-    )
+    raise HTTPException(status_code=401, detail="Could not acquire Graph token (OBO failed)")
 
 
 async def _graph_headers(api_jwt: str) -> Dict[str, str]:
@@ -132,8 +129,8 @@ async def _graph_headers(api_jwt: str) -> Dict[str, str]:
     return {"Authorization": f"Bearer {graph_token}"}
 
 
-def _shape_item(it: dict) -> dict:
-    """Normalize Graph driveItem into a lean shape your UI expects."""
+def _shape_item(it: dict, drive_id: str | None = None) -> dict:
+    """Normalize Graph driveItem into the lean shape the UI expects."""
     is_file = bool(it.get("file"))
     is_folder = bool(it.get("folder"))
     return {
@@ -145,6 +142,7 @@ def _shape_item(it: dict) -> dict:
         "isFile": is_file,
         "isFolder": is_folder and not is_file,
         "mimeType": (it.get("file") or {}).get("mimeType"),
+        "driveId": drive_id or ((it.get("parentReference") or {}).get("driveId")),
     }
 
 
@@ -158,20 +156,17 @@ def _b64url_decode(s: str) -> bytes:
 def _decode_jwt_noverify(token: str) -> dict:
     try:
         h, p, _ = token.split(".")
-        return {
-            "header": json.loads(_b64url_decode(h)),
-            "payload": json.loads(_b64url_decode(p)),
-        }
+        return {"header": json.loads(_b64url_decode(h)), "payload": json.loads(_b64url_decode(p))}
     except Exception as e:
         return {"error": str(e), "payload": {}}
 
 
 # ---------------------------------------------------------------------------
-# Additional capability helpers
+# Capability probes
 # ---------------------------------------------------------------------------
 
 def _is_spo_unlicensed_text(txt: str | None) -> bool:
-    """Detects the classic Graph error when SharePoint Online isn't licensed for the tenant."""
+    """Detect classic Graph error when SharePoint Online isn't licensed for the tenant."""
     if not txt:
         return False
     t = txt.lower()
@@ -181,22 +176,137 @@ def _is_spo_unlicensed_text(txt: str | None) -> bool:
         or ("sharepoint" in t and "license" in t)
     )
 
-
 async def _probe_capabilities(headers: Dict[str, str]) -> dict:
-    """Lightweight probe to report SPO/OneDrive availability for the UI."""
+    """
+    Detect SharePoint licensing via:
+      - sites/root (service reachable) OR
+      - /me/licenseDetails (plan has SharePoint/OneDrive and provisioningStatus Success)
+    Detect OneDrive by /me/drive.
+    """
     base = "https://graph.microsoft.com/v1.0"
-    spo_licensed = True
+    spo_licensed = False
     one_drive_available = False
 
-    async with httpx.AsyncClient(timeout=30) as client:
-        res = await client.get(f"{base}/me/drive", headers=headers)
-        if res.status_code < 400:
-            one_drive_available = True
+    async with httpx.AsyncClient(timeout=40) as client:
+        # A) Check service reachability (root site)
+        site = await client.get(f"{base}/sites/root", headers=headers)
+        if site.status_code < 400:
+            spo_licensed = True
         else:
-            if _is_spo_unlicensed_text(res.text):
+            txt = site.text
+            # Only mark unlicensed if the error explicitly says so.
+            if _is_spo_unlicensed_text(txt):
                 spo_licensed = False
+            else:
+                # B) Fall back to license details of the current user
+                lic = await client.get(f"{base}/me/licenseDetails", headers=headers)
+                if lic.status_code < 400:
+                    for d in lic.json().get("value", []):
+                        for sp in d.get("servicePlans", []):
+                            name = (sp.get("servicePlanName") or "").upper()
+                            status = (sp.get("provisioningStatus") or "").upper()
+                            # Common plan names: SHAREPOINTSTANDARD, SHAREPOINTENTERPRISE, ONEDRIVEENTERPRISE
+                            if ("SHAREPOINT" in name or "ONEDRIVE" in name) and status == "SUCCESS":
+                                spo_licensed = True
+                                break
+                        if spo_licensed:
+                            break
+                else:
+                    # If we can't read license details, assume licensed unless text says otherwise
+                    if not _is_spo_unlicensed_text(lic.text):
+                        spo_licensed = True
+
+        # OneDrive availability is independent
+        me_drive = await client.get(f"{base}/me/drive", headers=headers)
+        if me_drive.status_code < 400:
+            one_drive_available = True
 
     return {"spoLicensed": spo_licensed, "oneDriveAvailable": one_drive_available}
+
+
+# For Graph sites search (required header)
+CONSISTENT = {"ConsistencyLevel": "eventual", "Prefer": "HonorNonIndexedQueriesWarning=true"}
+
+
+# ---------------------------------------------------------------------------
+# SharePoint-only helpers (sites → drives)
+# ---------------------------------------------------------------------------
+
+async def _list_site_drives(headers: Dict[str, str], limit_sites: int = 10, limit_drives: int = 5) -> List[dict]:
+    """
+    Return virtual folders for SharePoint document libraries (drives).
+    1) Root site libraries (most tenants have these)
+    2) Other sites' libraries via search (requires ConsistencyLevel header)
+    """
+    base = "https://graph.microsoft.com/v1.0"
+    rows: List[dict] = []
+    async with httpx.AsyncClient(timeout=40) as client:
+        # ---- (A) Root site drives ----
+        root = await client.get(f"{base}/sites/root", headers=headers)
+        if root.status_code < 400:
+            root_id = root.json().get("id")
+            root_name = root.json().get("name") or root.json().get("displayName") or "Site"
+            if root_id:
+                drv = await client.get(f"{base}/sites/{root_id}/drives", headers=headers)
+                if drv.status_code < 400:
+                    for d in (drv.json().get("value") or [])[:limit_drives]:
+                        rows.append(
+                            {
+                                "id": "root",
+                                "name": f"{root_name} / {d.get('name') or 'Documents'}",
+                                "size": None,
+                                "lastModifiedDateTime": None,
+                                "webUrl": d.get("webUrl"),
+                                "isFolder": True,
+                                "isFile": False,
+                                "mimeType": None,
+                                "driveId": d.get("id"),
+                            }
+                        )
+                else:
+                    logger.warning("root drives failed: %s", drv.text)
+        elif _is_spo_unlicensed_text(root.text):
+            logger.info("_list_site_drives: SPO unlicensed; returning []")
+            return []
+
+        if rows:
+            return rows
+
+        # ---- (B) Other sites (best-effort) ----
+        sites = await client.get(f"{base}/sites?search=*",
+                                 headers={**headers, **CONSISTENT})
+        if sites.status_code >= 400:
+            if _is_spo_unlicensed_text(sites.text):
+                logger.info("SPO unlicensed (sites search); returning []")
+                return []
+            logger.warning("sites?search failed: %s", sites.text)
+            return rows  # empty, but not fatal
+
+        for s in (sites.json().get("value") or [])[:limit_sites]:
+            site_id = s.get("id")
+            site_name = s.get("name") or s.get("displayName") or "Site"
+            if not site_id:
+                continue
+            drv = await client.get(f"{base}/sites/{site_id}/drives", headers=headers)
+            if drv.status_code >= 400:
+                logger.warning("drives for site %s failed: %s", site_id, drv.text)
+                continue
+            for d in (drv.json().get("value") or [])[:limit_drives]:
+                rows.append(
+                    {
+                        "id": "root",
+                        "name": f"{site_name} / {d.get('name') or 'Documents'}",
+                        "size": None,
+                        "lastModifiedDateTime": None,
+                        "webUrl": d.get("webUrl"),
+                        "isFolder": True,
+                        "isFile": False,
+                        "mimeType": None,
+                        "driveId": d.get("id"),
+                    }
+                )
+
+    return rows
 
 
 # ---------------------------------------------------------------------------
@@ -209,7 +319,6 @@ async def status(authorization: str = Header(None)):
     Connectivity/status probe. Tries OBO; returns connected plus SPO/OneDrive capability flags.
     """
     api_jwt = _bearer_from_header(authorization)
-    await _get_graph_token_from_api_token(api_jwt)
     headers = await _graph_headers(api_jwt)
     caps = await _probe_capabilities(headers)
     return {"connected": True, **caps}
@@ -221,14 +330,9 @@ async def connect(authorization: str = Header(None)):
     No-op 'connect' endpoint for UI. Validates OBO exchange and returns success + capabilities.
     """
     api_jwt = _bearer_from_header(authorization)
-    await _get_graph_token_from_api_token(api_jwt)
     headers = await _graph_headers(api_jwt)
     caps = await _probe_capabilities(headers)
-    return {
-        "connected": True,
-        **caps,
-        "message": "SharePoint connection validated.",
-    }
+    return {"connected": True, **caps, "message": "SharePoint connection validated."}
 
 
 @router.post("/disconnect")
@@ -250,16 +354,14 @@ async def list_children(
 ):
     """
     List the children of a folder.
-    - If driveId is omitted -> uses the signed-in user's OneDrive (me/drive)
-    - itemId='root' lists the root. Otherwise lists children of that item id.
-    Fallbacks:
-      * If me/drive root is not available, list drives (me/drives)
-      * If the tenant lacks SharePoint Online (SPO) licensing, return [] gracefully
+    - If driveId is provided -> list items within that SharePoint document library.
+    - If driveId is omitted -> try OneDrive (me/drive). If unavailable, fall back to SharePoint sites' drives.
     """
     api_jwt = _bearer_from_header(authorization)
     headers = await _graph_headers(api_jwt)
-
     base = "https://graph.microsoft.com/v1.0"
+
+    # Branch 1: Given a driveId (SharePoint library) — straightforward
     if driveId:
         url = (
             f"{base}/drives/{driveId}/root/children"
@@ -270,154 +372,100 @@ async def list_children(
             res = await client.get(url, headers=headers)
             if res.status_code >= 400:
                 if _is_spo_unlicensed_text(res.text):
-                    logger.info(
-                        "/children: SPO unlicensed detected when using driveId=%s; returning []",
-                        driveId,
-                    )
+                    logger.info("/children: SPO unlicensed (driveId=%s); returning []", driveId)
                     return []
-                logger.warning(
-                    "/children driveId request failed: %s", res.text)
-                raise HTTPException(
-                    status_code=res.status_code, detail=res.text)
+                logger.warning("/children driveId request failed: %s", res.text)
+                raise HTTPException(status_code=res.status_code, detail=res.text)
             items = res.json().get("value", [])
-            return [
-                {
-                    "id": it.get("id"),
-                    "name": it.get("name"),
-                    "size": it.get("size"),
-                    "lastModifiedDateTime": it.get("lastModifiedDateTime"),
-                    "webUrl": it.get("webUrl"),
-                    "isFolder": bool(it.get("folder")),
-                    "isFile": bool(it.get("file")),
-                    "mimeType": (it.get("file") or {}).get("mimeType"),
-                    "driveId": driveId,
-                }
-                for it in items
-            ]
+            return [_shape_item(it, drive_id=driveId) for it in items]
 
-    # No driveId: try the user's personal drive first
-    url = (
-        f"{base}/me/drive/root/children"
-        if itemId == "root"
-        else f"{base}/me/drive/items/{itemId}/children"
-    )
+    # Branch 2: No driveId — try OneDrive; if not available, list SharePoint site drives
+    url = f"{base}/me/drive/root/children" if itemId == "root" else f"{base}/me/drive/items/{itemId}/children"
     async with httpx.AsyncClient(timeout=30) as client:
         res = await client.get(url, headers=headers)
         if res.status_code in (400, 404) and itemId == "root":
-            # Fallback to listing drives when personal OneDrive isn't available
-            drives = await client.get(f"{base}/me/drives", headers=headers)
-            if drives.status_code >= 400:
-                if _is_spo_unlicensed_text(drives.text):
-                    logger.info(
-                        "/children: SPO unlicensed on me/drives; returning []")
-                    return []
-                logger.warning(
-                    "/children me/drives fallback failed: %s", drives.text)
-                raise HTTPException(
-                    status_code=drives.status_code, detail=drives.text)
-            vals = drives.json().get("value", [])
-            # Return "virtual folders" representing drives
-            return [
-                {
-                    "id": "root",  # clicking this + driveId opens that drive's root
-                    "name": d.get("name") or "Drive",
-                    "size": None,
-                    "lastModifiedDateTime": None,
-                    "webUrl": None,
-                    "isFolder": True,
-                    "isFile": False,
-                    "mimeType": None,
-                    "driveId": d.get("id"),
-                }
-                for d in vals
-            ]
+            # OneDrive not provisioned — SharePoint fallback
+            try:
+                return await _list_site_drives(headers)
+            except HTTPException as he:
+                if he.status_code >= 400:
+                    logger.info("/children: fallback to site drives failed: %s", he.detail)
+                return []
 
         if res.status_code >= 400:
             if _is_spo_unlicensed_text(res.text):
-                logger.info(
-                    "/children: SPO unlicensed on me/drive; returning []")
+                logger.info("/children: SPO unlicensed on me/drive; returning []")
                 return []
             logger.warning("/children me/drive request failed: %s", res.text)
             raise HTTPException(status_code=res.status_code, detail=res.text)
 
-    items = res.json().get("value", [])
-    return [
-        {
-            "id": it.get("id"),
-            "name": it.get("name"),
-            "size": it.get("size"),
-            "lastModifiedDateTime": it.get("lastModifiedDateTime"),
-            "webUrl": it.get("webUrl"),
-            "isFolder": bool(it.get("folder")),
-            "isFile": bool(it.get("file")),
-            "mimeType": (it.get("file") or {}).get("mimeType"),
-            "driveId": None,
-        }
-        for it in items
-    ]
+        items = res.json().get("value", [])
+        # If OneDrive root is empty, offer sites instead of a blank list
+        if itemId == "root" and not items:
+            try:
+                return await _list_site_drives(headers)
+            except HTTPException:
+                return []
+        return [_shape_item(it) for it in items]
 
 
 @router.get("/list")
 async def list_recent_or_search(
-    query: str | None = None, authorization: str | None = Header(None)
+    query: str | None = None,
+    authorization: str | None = Header(None),
 ):
+    """
+    Search/browse without using Microsoft Search (/search/query).
+
+    If query is provided:
+      1) Try OneDrive per-drive search:   GET /me/drive/root/search(q='{q}')
+      2) If empty/unavailable, search each SharePoint library drive returned by
+         _list_site_drives():             GET /drives/{driveId}/root/search(q='{q}')
+
+    If no query:
+      - Try OneDrive 'recent'; if unavailable or empty, fall back to SharePoint site drives.
+    """
     api_jwt = _bearer_from_header(authorization)
     headers = await _graph_headers(api_jwt)
     base = "https://graph.microsoft.com/v1.0"
 
-    async with httpx.AsyncClient(timeout=30) as client:
-        if query:
-            url = f"{base}/me/drive/root/search(q='{query}')"
-            res = await client.get(url, headers=headers)
-            if res.status_code >= 400:
-                if _is_spo_unlicensed_text(res.text):
-                    logger.info("/list search: SPO unlicensed; returning []")
-                    return []
-                logger.warning("/list search failed: %s", res.text)
-                raise HTTPException(
-                    status_code=res.status_code, detail=res.text)
-            items = res.json().get("value", [])
-            return [
-                {
-                    "id": it.get("id"),
-                    "name": it.get("name"),
-                    "size": it.get("size"),
-                    "lastModifiedDateTime": it.get("lastModifiedDateTime"),
-                    "webUrl": it.get("webUrl"),
-                    "mimeType": (it.get("file") or {}).get("mimeType"),
-                    "isFile": bool(it.get("file")),
-                    "isFolder": bool(it.get("folder")),
-                    "driveId": None,
-                }
-                for it in items
-                if it.get("file") or it.get("folder")
-            ]
+    # ------------------- SEARCH PATH (no Microsoft Search dependency) -------------------
+    if query:
+        out: List[dict] = []
+        async with httpx.AsyncClient(timeout=40) as client:
+            # (1) OneDrive search (if provisioned)
+            r = await client.get(f"{base}/me/drive/root/search(q='{query}')", headers=headers)
+            if r.status_code < 400:
+                for it in r.json().get("value", []):
+                    out.append(_shape_item(it))
 
-        # No query: try "recent", fall back to drives if needed
+            # (2) If nothing found or OneDrive not available, search SharePoint libraries
+            if not out:
+                drives = await _list_site_drives(headers, limit_sites=20, limit_drives=10)
+                for d in drives:
+                    did = d.get("driveId")
+                    if not did:
+                        continue
+                    sr = await client.get(f"{base}/drives/{did}/root/search(q='{query}')", headers=headers)
+                    if sr.status_code >= 400:
+                        # skip drives we can't search due to permissions/policies
+                        continue
+                    for it in sr.json().get("value", []):
+                        out.append(_shape_item(it, drive_id=did))
+
+        return out
+
+    # ------------------- NO-QUERY PATH (browse) -------------------
+    async with httpx.AsyncClient(timeout=40) as client:
         res = await client.get(f"{base}/me/drive/recent", headers=headers)
         if res.status_code in (400, 404):
-            drives = await client.get(f"{base}/me/drives", headers=headers)
-            if drives.status_code >= 400:
-                if _is_spo_unlicensed_text(drives.text):
-                    logger.info(
-                        "/list recent fallback to drives: SPO unlicensed; returning []"
-                    )
-                    return []
-                logger.warning(
-                    "/list me/drives fallback failed: %s", drives.text)
-                raise HTTPException(
-                    status_code=drives.status_code, detail=drives.text)
-            vals = drives.json().get("value", [])
-            return [
-                {
-                    "id": "root",
-                    "name": d.get("name") or "Drive",
-                    "isFile": False,
-                    "isFolder": True,
-                    "driveId": d.get("id"),
-                }
-                for d in vals
-            ]
+            # OneDrive not available → SharePoint site libraries
+            try:
+                return await _list_site_drives(headers)
+            except HTTPException as he:
+                if he.status_code >= 400:
+                    logger.info("/list recent fallback to site drives failed: %s", he.detail)
+                return []
 
         if res.status_code >= 400:
             if _is_spo_unlicensed_text(res.text):
@@ -427,44 +475,51 @@ async def list_recent_or_search(
             raise HTTPException(status_code=res.status_code, detail=res.text)
 
         items = res.json().get("value", [])
-        # "recent" returns files only
-        return [
-            {
-                "id": it.get("id"),
-                "name": it.get("name"),
-                "size": it.get("size"),
-                "lastModifiedDateTime": it.get("lastModifiedDateTime"),
-                "webUrl": it.get("webUrl"),
-                "mimeType": (it.get("file") or {}).get("mimeType"),
-                "isFile": bool(it.get("file")),
-                "isFolder": False,
-                "driveId": None,
-            }
-            for it in items
-            if it.get("file")
-        ]
+        if not items:
+            # No recent files; show SharePoint site libraries so the picker isn't empty
+            try:
+                return await _list_site_drives(headers)
+            except HTTPException:
+                return []
+
+        # 'recent' returns files (driveItems)
+        return [_shape_item(it) for it in items if it.get("file") or it.get("folder")]
 
 
 @router.get("/download/{item_id}")
 async def download_item(
     item_id: str,
     authorization: str = Header(None),
+    driveId: str | None = Query(None),
 ):
     """
-    Download file bytes for a specific drive item id (me/drive/items/{id}/content).
+    Download file bytes for a specific drive item.
+    - If driveId is provided -> /drives/{driveId}/items/{item_id}/content (site library or OneDrive).
+    - Else -> /me/drive/items/{item_id}/content (works only for OneDrive items).
     """
     api_jwt = _bearer_from_header(authorization)
     headers = await _graph_headers(api_jwt)
 
-    url = f"https://graph.microsoft.com/v1.0/me/drive/items/{item_id}/content"
+    base = "https://graph.microsoft.com/v1.0"
+    url = (
+        f"{base}/drives/{driveId}/items/{item_id}/content"
+        if driveId
+        else f"{base}/me/drive/items/{item_id}/content"
+    )
+
     async with httpx.AsyncClient(follow_redirects=True, timeout=None) as client:
         res = await client.get(url, headers=headers)
         if res.status_code >= 400:
+            # If caller forgot driveId for a site item, explain what's needed
+            if not driveId and res.status_code in (400, 404):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Download failed. This item is not in your personal OneDrive. Re-try with its driveId.",
+                )
             logger.warning("/download failed: %s", res.text)
             raise HTTPException(status_code=res.status_code, detail=res.text)
 
-        content_type = res.headers.get(
-            "Content-Type", "application/octet-stream")
+        content_type = res.headers.get("Content-Type", "application/octet-stream")
         disp = res.headers.get("Content-Disposition", "")
 
         filename = "file"
@@ -478,8 +533,10 @@ async def download_item(
             media_type=content_type,
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
+
+
 # ---------------------------------------------------------------------------
-# Debug endpoint to verify tenant/user context and Graph behavior
+# Debug endpoint to verify tenant/user context, licensing, and Graph behavior
 # ---------------------------------------------------------------------------
 @router.get("/debug/whoami")
 async def debug_whoami(
@@ -493,21 +550,18 @@ async def debug_whoami(
               the token can be passed as ?access_token=...
     """
     raw_auth = authorization
-    # Dev-only override when header isn't easy to add
     if (not raw_auth) and os.getenv("DEBUG_ALLOW_TOKEN_QUERY") == "1" and access_token:
         raw_auth = f"Bearer {access_token}"
 
-    # API access token (for your backend API)
     api_jwt = _bearer_from_header(raw_auth)
     api_claims = _decode_jwt_noverify(api_jwt).get("payload", {})
 
-    # Acquire a Graph token via OBO and decode it
     graph_token = await _get_graph_token_from_api_token(api_jwt)
     graph_claims = _decode_jwt_noverify(graph_token).get("payload", {})
     headers = {"Authorization": f"Bearer {graph_token}"}
 
     base = "https://graph.microsoft.com/v1.0"
-    out = {
+    out: Dict[str, Any] = {
         "apiToken": {
             "tid": api_claims.get("tid"),
             "upn": api_claims.get("upn") or api_claims.get("preferred_username"),
@@ -524,31 +578,34 @@ async def debug_whoami(
 
     async with httpx.AsyncClient(timeout=30) as client:
         me = await client.get(f"{base}/me", headers=headers)
-        out["me"] = {
-            "status": me.status_code,
-            "body": me.json() if me.status_code < 400 else me.text,
-        }
+        out["me"] = {"status": me.status_code, "body": me.json() if me.status_code < 400 else me.text}
 
         me_drive = await client.get(f"{base}/me/drive", headers=headers)
-        out["me_drive"] = {
-            "status": me_drive.status_code,
-            "body": me_drive.json() if me_drive.status_code < 400 else me.text,
-        }
+        out["me_drive"] = {"status": me_drive.status_code, "body": me_drive.json() if me_drive.status_code < 400 else me.text}
 
         me_drives = await client.get(f"{base}/me/drives", headers=headers)
         out["me_drives"] = {
             "status": me_drives.status_code,
-            "body": me_drives.json().get("value", [])
-            if me_drives.status_code < 400
-            else me_drives.text,
+            "body": me_drives.json().get("value", []) if me_drives.status_code < 400 else me_drives.text,
         }
 
-        org = await client.get(
-            f"{base}/organization?$select=id,displayName", headers=headers
-        )
-        out["organization"] = {
-            "status": org.status_code,
-            "body": org.json() if org.status_code < 400 else org.text,
+        org = await client.get(f"{base}/organization?$select=id,displayName", headers=headers)
+        out["organization"] = {"status": org.status_code, "body": org.json() if org.status_code < 400 else org.text}
+
+        # License/service plans for the signed-in user (helps confirm SharePoint/OneDrive)
+        lic = await client.get(f"{base}/me/licenseDetails", headers=headers)
+        out["licenseDetails"] = {
+            "status": lic.status_code,
+            "plans": [
+                {
+                    "skuPartNumber": d.get("skuPartNumber"),
+                    "servicePlans": [
+                        {"name": sp.get("servicePlanName"), "status": sp.get("provisioningStatus")}
+                        for sp in (d.get("servicePlans") or [])
+                    ],
+                }
+                for d in (lic.json().get("value", []) if lic.status_code < 400 else [])
+            ] if lic.status_code < 400 else lic.text,
         }
 
     return out

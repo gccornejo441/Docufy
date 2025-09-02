@@ -6,8 +6,6 @@ import Button from "./ui/Button";
 import { useTheme } from "../provider/useTheme";
 import type { Theme } from "../provider/theme.types";
 import DpiSettings from "./dpi/DpiSettings";
-import ImportConnectorsMenu from "./connectors/ImportConnectorsMenu";
-import type { ConnectorDescriptor } from "../types/connectors";
 
 interface ControlsProps {
   onReset: () => void;
@@ -18,7 +16,6 @@ interface ControlsProps {
   dpi?: number;
   onChangeDpi?: (dpi: number) => void;
   showActions?: boolean;
-  onImportFromSharePoint?: () => void;
   onManageConnections?: () => void;
 }
 
@@ -31,24 +28,10 @@ export default function Controls({
   dpi: dpiProp,
   onChangeDpi,
   showActions = true,
-  onImportFromSharePoint,
   onManageConnections,
 }: ControlsProps) {
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const { theme, setTheme } = useTheme();
-
-  const connectors = React.useMemo<ConnectorDescriptor[]>(() => {
-    const list: ConnectorDescriptor[] = [];
-    if (onImportFromSharePoint) {
-      list.push({
-        id: "sharepoint",
-        label: "Import from SharePoint",
-        iconSrc: "/sharepoint.svg",
-        onSelect: onImportFromSharePoint,
-      });
-    }
-    return list;
-  }, [onImportFromSharePoint]);
 
   const menuItemBase =
     "group px-3 py-2 text-sm rounded-md outline-none cursor-pointer flex items-center gap-2 " +
@@ -159,12 +142,6 @@ export default function Controls({
                   <DropdownMenu.Separator className="my-1 h-px bg-[var(--gray-a6)]" />
                 </>
               )}
-
-              <ImportConnectorsMenu
-                connectors={connectors}
-                disabled={isUploading}
-                menuItemBase={menuItemBase}
-              />
 
               <DropdownMenu.Item
                 onSelect={() => setSettingsOpen(true)}
