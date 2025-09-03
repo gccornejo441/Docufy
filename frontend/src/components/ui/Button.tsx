@@ -2,7 +2,7 @@ import React from "react";
 import { twMerge } from "tailwind-merge";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "settings";
+  variant?: "primary" | "secondary" | "settings" | "ghost";
 }
 
 export default function Button({ variant = "primary", className, ...props }: ButtonProps) {
@@ -26,6 +26,10 @@ export default function Button({ variant = "primary", className, ...props }: But
       "bg-[var(--btn-settings-bg)] text-[var(--btn-settings-fg)] hover:bg-[var(--btn-settings-bg-hover)] " +
       "data-[contrast=more]:bg-[var(--btn-settings-bg-hc)] data-[contrast=more]:text-[var(--btn-settings-fg-hc)] " +
       "forced-colors:bg-[ButtonFace] forced-colors:text-[ButtonText] forced-colors:outline forced-colors:outline-[ButtonText]",
+    ghost:
+      "bg-transparent text-[var(--gray-12)] hover:bg-[var(--gray-3)] " +
+      "data-[contrast=more]:bg-transparent data-[contrast=more]:outline data-[contrast=more]:outline-1 " +
+      "forced-colors:bg-transparent forced-colors:text-[ButtonText] forced-colors:outline forced-colors:outline-[ButtonText]",
   };
 
   return <button className={twMerge(base, variants[variant], className)} {...props} />;

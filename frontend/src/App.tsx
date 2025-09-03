@@ -10,6 +10,7 @@ import { API_BASE } from "./lib/api";
 import DocumentViewerDialog from "./components/DocumentViewerDialog";
 import PdfRegionSelector from "./components/PdfRegionSelector/PdfRegionSelector";
 import Button from "./components/ui/Button";
+import { ensurePdf } from "./lib/ensurePdf";
 
 const APP_TITLE = import.meta.env.VITE_APP_TITLE || "Docufy";
 
@@ -84,6 +85,33 @@ export default function App() {
     }
   }, [ocr]);
 
+  /** Convert File[] -> FileList via DataTransfer. */
+  const toFileList = React.useCallback((files: File[]): FileList => {
+    const dt = new DataTransfer();
+    files.forEach((f) => dt.items.add(f));
+    return dt.files;
+  }, []);
+
+  /**
+   * Normalize incoming files to PDF (screenshots/images -> 1-page PDF)
+   * and feed them through the same path your file input uses (onFileChange).
+   */
+  const ingestFiles = React.useCallback(
+    async (files: File[]) => {
+      if (!files.length) return;
+
+      const normalized = await Promise.all(files.map(ensurePdf));
+      const fileList = toFileList(normalized);
+
+      const syntheticChange = {
+        target: { files: fileList },
+      } as unknown as React.ChangeEvent<HTMLInputElement>;
+
+      ocr.onFileChange(syntheticChange);
+    },
+    [ocr, toFileList]
+  );
+
   return (
     <div className="min-h-screen flex flex-col items-center p-6 bg-[var(--color-background)] text-[color:var(--gray-12)]">
       {/* Skip link */}
@@ -128,6 +156,13 @@ export default function App() {
           isUploading={ocr.isUploading || running}
           isDocReady={!!ocr.file}
           onOpenDoc={() => setViewerOpen(true)}
+          // Route screenshots through normalization -> PDF -> input path
+          onCaptureScreenshot={(file) => {
+            void ingestFiles([file]);
+            // Optionally open viewer immediately:
+            // setViewerOpen(true);
+          }}
+          onCaptureError={(e) => console.warn("Screenshot error:", e)}
         />
 
         {/* Primary CTA: Dropzone */}

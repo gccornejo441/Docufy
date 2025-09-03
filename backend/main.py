@@ -7,24 +7,37 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import shutil
-import logging, sys
+import logging
+import sys
+import threading
 import fitz
 
+from .watch import worker_loop, request_shutdown
+from .watch_api import router as watch_router
+from . import settings
+from .settings_api import router as settings_router
+from .recipes import get_recipe 
+from .recipes_api import router as recipes_router
+
 from docufy_ocr import __version__ as docuocr_version, DocuOCR
-from .sharepoint import router as sharepoint_router
 
 # ---------- logging setup ----------
 logger = logging.getLogger("docuocr.api")
 logger.setLevel(logging.INFO)
 if not logger.handlers:
     h = logging.StreamHandler(sys.stdout)
-    h.setFormatter(logging.Formatter("%(levelname)s %(asctime)s [%(name)s] %(message)s"))
+    h.setFormatter(logging.Formatter(
+        "%(levelname)s %(asctime)s [%(name)s] %(message)s"))
     logger.addHandler(h)
 logger.propagate = False
 # -----------------------------------
 
 app = FastAPI(title="DocuOCR Text Extraction API", version="1.0.0")
-app.include_router(sharepoint_router, prefix="/api")
+
+# Routers
+app.include_router(watch_router)
+app.include_router(settings_router)
+app.include_router(recipes_router)
 
 origins = [
     "http://localhost:5173",
@@ -39,6 +52,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Where the watch worker writes extracted JSON files (global default)
+OUT_DIR = os.getenv("DOCUFY_OUT_DIR", str(
+    (Path(__file__).parent / "out").resolve()))
+
+
 def _make_ocr(dpi: Optional[int] = None, lang: Optional[str] = None) -> DocuOCR:
     kwargs = {}
     if dpi is not None:
@@ -46,8 +64,45 @@ def _make_ocr(dpi: Optional[int] = None, lang: Optional[str] = None) -> DocuOCR:
     if lang is not None:
         kwargs["lang"] = lang
     ocr = DocuOCR(**kwargs) if kwargs else DocuOCR()
-    logger.info("OCR init: dpi=%s lang=%s", getattr(ocr, "dpi", None), getattr(ocr, "lang", None))
+    logger.info("OCR init: dpi=%s lang=%s", getattr(
+        ocr, "dpi", None), getattr(ocr, "lang", None))
     return ocr
+
+
+# --------- UPDATED: use recipe (id or path) to influence OCR options ----------
+def process_document(src_path: Path, recipe_ref: str):
+    """
+    Called by the watch worker for each new file it detects.
+    recipe_ref may be an id (resolved under backend/recipes) or a full path to a JSON file.
+    Returns a dict (or JSON string) which the worker will write as <out_dir>/<file>.json.
+    """
+    logger.info("Watch: processing file=%s recipe=%s", src_path, recipe_ref)
+
+    recipe = get_recipe(recipe_ref) or {}
+    # pull options from recipe if present
+    recipe_pp = recipe.get("preprocess") or {}
+    dpi = recipe_pp.get("dpi")
+    lang = recipe.get("language")
+
+    ocr = _make_ocr(dpi=dpi, lang=lang)
+
+    # TODO: If you add zone/table logic, call a specialized DocuOCR method here.
+    # For now, plain PDF processing:
+    text, words = ocr.process_pdf(src_path)
+
+    return {
+        "file": src_path.name,
+        "recipeId": recipe_ref,
+        "metadata": {
+            "docuocr_version": docuocr_version,
+            "dpi": getattr(ocr, "dpi", None),
+            "lang": getattr(ocr, "lang", None),
+        },
+        "text": text,
+        "words": words,
+        "recipe_used": recipe.get("name") if recipe else None,
+    }
+# -----------------------------------------------------------------------------
 
 
 class ExtractResponse(BaseModel):
@@ -97,7 +152,8 @@ async def extract_document(
 ):
     if not file.filename:
         raise HTTPException(status_code=400, detail="Missing filename.")
-    logger.info("POST /extract file=%s dpi=%s lang=%s", file.filename, dpi, lang)
+    logger.info("POST /extract file=%s dpi=%s lang=%s",
+                file.filename, dpi, lang)
 
     tmp_path = _save_to_temp(file)
     background_tasks.add_task(_cleanup, [tmp_path])
@@ -119,7 +175,8 @@ async def extract_document(
             filename=file.filename,
             text=text,
             words=words,
-            metadata={"docuocr_version": docuocr_version, "dpi": ocr.dpi, "lang": ocr.lang},
+            metadata={"docuocr_version": docuocr_version,
+                      "dpi": ocr.dpi, "lang": ocr.lang},
         )
     except Exception as e:
         logger.exception("OCR failed")
@@ -135,7 +192,8 @@ async def extract_multiple(
 ):
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded.")
-    logger.info("POST /extract/multi count=%d dpi=%s lang=%s", len(files), dpi, lang)
+    logger.info("POST /extract/multi count=%d dpi=%s lang=%s",
+                len(files), dpi, lang)
 
     tmp_paths: List[Path] = []
     try:
@@ -144,7 +202,8 @@ async def extract_multiple(
             tmp_paths.append(p)
             try:
                 size = os.path.getsize(p)
-                logger.info("Saved temp PDF: %s (%d bytes) file=%s", p, size, f.filename)
+                logger.info("Saved temp PDF: %s (%d bytes) file=%s",
+                            p, size, f.filename)
             except Exception:
                 logger.info("Saved temp PDF: %s file=%s", p, f.filename)
 
@@ -231,7 +290,8 @@ def _save_region_debug_png(
     x, y, w, h = rect_norm_view
     with fitz.open(pdf_path) as doc:
         page = doc[page_num_1based - 1]
-        xr, yr, wr, hr = _map_rect_variant(x, y, w, h, rotation, swapped=swapped)
+        xr, yr, wr, hr = _map_rect_variant(
+            x, y, w, h, rotation, swapped=swapped)
         pr = page.rect
         clip = fitz.Rect(
             pr.x0 + xr * pr.width,
@@ -241,7 +301,8 @@ def _save_region_debug_png(
         )
         mat = fitz.Matrix((dpi or 360) / 72.0, (dpi or 360) / 72.0)
         pix = page.get_pixmap(matrix=mat, clip=clip, alpha=False)
-        out = Path(NamedTemporaryFile(delete=False, suffix=("_B.png" if swapped else "_A.png")).name)
+        out = Path(NamedTemporaryFile(delete=False, suffix=(
+            "_B.png" if swapped else "_A.png")).name)
         pix.save(out.as_posix())
         logger.info(
             "DEBUG crop %s: %s (%dx%d)", "B(swapped)" if swapped else "A",
@@ -260,7 +321,8 @@ async def extract_region(
     y: float = Form(..., description="Normalized top (0-1) in rotated view"),
     w: float = Form(..., description="Normalized width (0-1) in rotated view"),
     h: float = Form(..., description="Normalized height (0-1) in rotated view"),
-    rotation: int = Form(0, description="Rotation applied in viewer (0,90,180,270)"),
+    rotation: int = Form(
+        0, description="Rotation applied in viewer (0,90,180,270)"),
     dpi: Optional[int] = Form(None),
     lang: Optional[str] = Form(None),
     debug: int = Form(0),  # set to 1 to save debug crops A/B
@@ -284,11 +346,13 @@ async def extract_region(
     except Exception:
         logger.info("Saved temp PDF: %s", tmp_pdf)
 
-    # optional debug: write A/B crops to temp so you can eyeball mapping
+    # optional debug crops
     if debug:
         try:
-            a = _save_region_debug_png(tmp_pdf, page, (x, y, w, h), rotation, (dpi or 360), swapped=False)
-            b = _save_region_debug_png(tmp_pdf, page, (x, y, w, h), rotation, (dpi or 360), swapped=True)
+            a = _save_region_debug_png(
+                tmp_pdf, page, (x, y, w, h), rotation, (dpi or 360), swapped=False)
+            b = _save_region_debug_png(
+                tmp_pdf, page, (x, y, w, h), rotation, (dpi or 360), swapped=True)
             logger.info("DEBUG crops written: A=%s  B=%s", a, b)
         except Exception:
             logger.exception("Failed creating debug crops")
@@ -327,3 +391,30 @@ async def extract_region(
     except Exception as e:
         logger.exception("Region OCR failed")
         raise HTTPException(status_code=500, detail=f"Region OCR failed: {e}")
+
+
+# ---------- Startup / Shutdown: start the watch worker ----------
+_worker_thread: Optional[threading.Thread] = None
+
+
+@app.on_event("startup")
+def _startup() -> None:
+    global _worker_thread
+    eff_out = settings.get_out_dir()
+    if _worker_thread is None or not _worker_thread.is_alive():
+        logger.info("Starting watch worker thread; OUT_DIR=%s", eff_out)
+        _worker_thread = threading.Thread(
+            target=worker_loop,
+            kwargs={"process_func": process_document,
+                    "out_dir": settings.get_out_dir, "move_original": True},
+            daemon=True,
+        )
+        _worker_thread.start()
+
+
+@app.on_event("shutdown")
+def _shutdown() -> None:
+    logger.info("Shutting down watch worker")
+    request_shutdown()
+    if _worker_thread and _worker_thread.is_alive():
+        _worker_thread.join(timeout=2.0)
