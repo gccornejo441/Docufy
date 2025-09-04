@@ -13,6 +13,7 @@ import {
   Camera,
   Folder,
   FileCog,
+  X,
 } from "lucide-react";
 import Button from "./ui/Button";
 import { useTheme } from "../provider/useTheme";
@@ -94,8 +95,8 @@ export default function Controls({
     default_recipe_id: "default",
     out_dir: "C:\\\\Docufy\\\\Outbox",
   });
-  const [recipePath, setRecipePath] = React.useState<string>(""); // optional explicit recipe file path
-  const [outDirOverride, setOutDirOverride] = React.useState<string>(""); // optional per-watcher out dir
+  const [recipePath, setRecipePath] = React.useState<string>("");
+  const [outDirOverride, setOutDirOverride] = React.useState<string>("");
   const [activeWatchers, setActiveWatchers] = React.useState<string[]>([]);
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState<string>("");
@@ -245,20 +246,36 @@ export default function Controls({
         {/* Advanced (DPI) Settings dialog */}
         <Dialog.Root open={settingsOpen} onOpenChange={setSettingsOpen}>
           <Dialog.Portal>
-            <Dialog.Overlay className="fixed inset-0 bg-[var(--gray-a8)] backdrop-blur-[2px] transition-opacity duration-200 data-[state=open]:opacity-100 data-[state=closed]:opacity-0" />
-            <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(92vw,600px)] rounded-2xl shadow-2xl border p-5 bg-[var(--surface-1)] text-[var(--gray-12)] border-[var(--gray-a6)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-4 focus-visible:ring-offset-[var(--surface-1)]">
-              <Dialog.Title className="text-lg font-semibold mb-4">
-                Advanced Settings
-              </Dialog.Title>
+            <Dialog.Overlay className="fixed inset-0 bg-[var(--gray-a8)] backdrop-blur-[2px] data-[state=open]:opacity-100 data-[state=closed]:opacity-0" />
+            {/* Card is the content itself (not full-screen) so outside click closes */}
+            <Dialog.Content className="fixed left-1/2 top-1/2 w-[min(92vw,600px)] max-h-[85vh] -translate-x-1/2 -translate-y-1/2 rounded-2xl shadow-2xl border bg-[var(--surface-1)] text-[var(--gray-12)] border-[var(--gray-a6)] focus:outline-none">
+              <div className="relative flex flex-col max-h-[85vh]">
+                <header className="p-4 border-b">
+                  <Dialog.Title className="text-lg font-semibold">
+                    Advanced Settings
+                  </Dialog.Title>
+                  {/* Close icon in header */}
+                  <Dialog.Close
+                    aria-label="Close"
+                    className="absolute right-3 top-3 p-1 rounded hover:bg-[var(--gray-3)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
+                  >
+                    <X className="w-5 h-5" />
+                  </Dialog.Close>
+                </header>
 
-              <DpiSettings value={dpiProp} onChange={onChangeDpi} />
+                {/* Scroll area */}
+                <div className="p-4 overflow-y-auto">
+                  <DpiSettings value={dpiProp} onChange={onChangeDpi} />
+                </div>
 
-              <div className="mt-6 flex justify-end gap-2">
-                <Dialog.Close asChild>
-                  <Button type="button" variant="settings">
-                    Close
-                  </Button>
-                </Dialog.Close>
+                <footer className="p-4 border-t flex justify-end">
+                  {/* Extra safety: also close via state in case custom Button doesn’t forward refs */}
+                  <Dialog.Close asChild>
+                    <Button type="button" variant="settings" onClick={() => setSettingsOpen(false)}>
+                      Close
+                    </Button>
+                  </Dialog.Close>
+                </footer>
               </div>
             </Dialog.Content>
           </Dialog.Portal>
@@ -267,114 +284,138 @@ export default function Controls({
         {/* Watch Folder Settings dialog */}
         <Dialog.Root open={watchOpen} onOpenChange={setWatchOpen}>
           <Dialog.Portal>
-            <Dialog.Overlay className="fixed inset-0 bg-[var(--gray-a8)] backdrop-blur-[2px] transition-opacity duration-200 data-[state=open]:opacity-100 data-[state=closed]:opacity-0" />
-            <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(92vw,720px)] rounded-2xl shadow-2xl border p-5 bg-[var(--surface-1)] text-[var(--gray-12)] border-[var(--gray-a6)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-4 focus-visible:ring-offset-[var(--surface-1)]">
-              <Dialog.Title className="text-lg font-semibold mb-4">
-                Watch Folder Settings
-              </Dialog.Title>
+            <Dialog.Overlay className="fixed inset-0 bg-[var(--gray-a8)] backdrop-blur-[2px] data-[state=open]:opacity-100 data-[state=closed]:opacity-0" />
+            {/* Card is the content itself (not full-screen) so outside click closes */}
+            <Dialog.Content className="fixed left-1/2 top-1/2 w-[min(92vw,720px)] max-h-[85vh] -translate-x-1/2 -translate-y-1/2 rounded-2xl shadow-2xl border bg-[var(--surface-1)] text-[var(--gray-12)] border-[var(--gray-a6)] focus:outline-none">
+              <div className="relative flex flex-col max-h-[85vh]">
+                <header className="p-4 border-b">
+                  <Dialog.Title className="text-lg font-semibold">
+                    Watch Folder Settings
+                  </Dialog.Title>
+                  <Dialog.Description className="sr-only">
+                    Configure server-side watch folder, recipe, and output directory. Includes optional per-watcher overrides.
+                  </Dialog.Description>
+                  {/* Close icon in header */}
+                  <Dialog.Close
+                    aria-label="Close"
+                    className="absolute right-3 top-3 p-1 rounded hover:bg-[var(--gray-3)] focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
+                  >
+                    <X className="w-5 h-5" />
+                  </Dialog.Close>
+                </header>
 
-              <p className="text-sm opacity-80 mb-3">
-                These are <b>server</b> paths. If your API runs in Docker or on another machine,
-                use paths that exist there (e.g., mounted volumes or UNC shares like <code>\\server\scans</code>).
-              </p>
-
-              <div className="grid gap-3">
-                <label className="text-sm">Default watch folder</label>
-                <input
-                  className="w-full rounded border px-3 py-2"
-                  value={form.default_watch_folder}
-                  onChange={(e) => setForm((s) => ({ ...s, default_watch_folder: e.target.value }))}
-                  placeholder="C:\Docufy\Inbox"
-                />
-
-                <label className="text-sm mt-2">Default recipe id</label>
-                <input
-                  className="w-full rounded border px-3 py-2"
-                  value={form.default_recipe_id}
-                  onChange={(e) => setForm((s) => ({ ...s, default_recipe_id: e.target.value }))}
-                  placeholder="default"
-                />
-
-                <label className="text-sm mt-2">Output folder</label>
-                <input
-                  className="w-full rounded border px-3 py-2"
-                  value={form.out_dir}
-                  onChange={(e) => setForm((s) => ({ ...s, out_dir: e.target.value }))}
-                  placeholder="C:\Docufy\Outbox"
-                />
-
-                {/* Optional overrides for this watcher only */}
-                <div className="mt-4 rounded-lg border p-3">
-                  <div className="text-sm font-medium mb-2">Per-watcher overrides (optional)</div>
-
-                  <label className="text-sm">Recipe file (server path or UNC)</label>
-                  <input
-                    className="w-full rounded border px-3 py-2"
-                    value={recipePath}
-                    onChange={(e) => setRecipePath(e.target.value)}
-                    placeholder="C:\Docufy\Recipes\invoices_v3.json"
-                  />
-                  <p className="text-xs opacity-70 mt-1">
-                    If set, this overrides the recipe id above.
+                {/* Scroll area */}
+                <div className="p-4 overflow-y-auto">
+                  <p className="text-sm opacity-80 mb-3">
+                    These are <b>server</b> paths. If your API runs in Docker or on another machine,
+                    use paths that exist there (e.g., mounted volumes or UNC shares like <code>\\server\scans</code>).
                   </p>
 
-                  <label className="text-sm mt-3">Watcher output folder override</label>
-                  <input
-                    className="w-full rounded border px-3 py-2"
-                    value={outDirOverride}
-                    onChange={(e) => setOutDirOverride(e.target.value)}
-                    placeholder="C:\Docufy\Outbox\Invoices"
-                  />
-                  <p className="text-xs opacity-70 mt-1">
-                    If set, results from this watcher will be written here instead of the global output folder.
-                  </p>
+                  <div className="grid gap-3">
+                    <label className="text-sm">Default watch folder</label>
+                    <input
+                      className="w-full rounded border px-3 py-2 break-all"
+                      value={form.default_watch_folder}
+                      onChange={(e) => setForm((s) => ({ ...s, default_watch_folder: e.target.value }))}
+                      placeholder="C:\\Docufy\\Inbox"
+                      autoComplete="off"
+                    />
+
+                    <label className="text-sm mt-2">Default recipe id</label>
+                    <input
+                      className="w-full rounded border px-3 py-2 break-all"
+                      value={form.default_recipe_id}
+                      onChange={(e) => setForm((s) => ({ ...s, default_recipe_id: e.target.value }))}
+                      placeholder="default"
+                      autoComplete="off"
+                    />
+
+                    <label className="text-sm mt-2">Output folder</label>
+                    <input
+                      className="w-full rounded border px-3 py-2 break-all"
+                      value={form.out_dir}
+                      onChange={(e) => setForm((s) => ({ ...s, out_dir: e.target.value }))}
+                      placeholder="C:\\Docufy\\Outbox"
+                      autoComplete="off"
+                    />
+
+                    {/* Optional overrides for this watcher only */}
+                    <div className="mt-4 rounded-lg border p-3">
+                      <div className="text-sm font-medium mb-2">Per-watcher overrides (optional)</div>
+
+                      <label className="text-sm">Recipe file (server path or UNC)</label>
+                      <input
+                        className="w-full rounded border px-3 py-2 break-all"
+                        value={recipePath}
+                        onChange={(e) => setRecipePath(e.target.value)}
+                        placeholder="C:\\Docufy\\Recipes\\invoices_v3.json"
+                        autoComplete="off"
+                      />
+                      <p className="text-xs opacity-70 mt-1">
+                        If set, this overrides the recipe id above.
+                      </p>
+
+                      <label className="text-sm mt-3">Watcher output folder override</label>
+                      <input
+                        className="w-full rounded border px-3 py-2 break-all"
+                        value={outDirOverride}
+                        onChange={(e) => setOutDirOverride(e.target.value)}
+                        placeholder="C:\\Docufy\\Outbox\\Invoices"
+                        autoComplete="off"
+                      />
+                      <p className="text-xs opacity-70 mt-1">
+                        If set, results from this watcher will be written here instead of the global output folder.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button onClick={saveSettings} disabled={busy}>
+                      <span className="whitespace-nowrap">Save defaults</span>
+                    </Button>
+                    <Button variant="secondary" onClick={startWatcher} disabled={busy}>
+                      <span className="whitespace-nowrap">Start watcher with defaults/overrides</span>
+                    </Button>
+                    <Button variant="ghost" onClick={() => void refreshWatchers()}>
+                      <span className="whitespace-nowrap">Refresh status</span>
+                    </Button>
+                  </div>
+
+                  {msg && <p className="mt-2 text-sm" aria-live="polite">{msg}</p>}
+
+                  <div className="mt-5 rounded-xl border p-3">
+                    <div className="font-medium">Active watchers</div>
+                    {activeWatchers.length === 0 ? (
+                      <div className="text-sm opacity-70 mt-2">None</div>
+                    ) : (
+                      <ul className="mt-2 space-y-2">
+                        {activeWatchers.map((k) => (
+                          <li key={k} className="flex items-center justify-between gap-2 rounded border p-2">
+                            <code className="text-xs break-all">{k}</code>
+                            <Button variant="ghost" onClick={() => void stopWatcher(k)} disabled={busy}>
+                              Stop
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </div>
-              </div>
 
-              <div className="mt-4 flex gap-2">
-                <Button onClick={saveSettings} disabled={busy}>
-                  Save defaults
-                </Button>
-                <Button variant="secondary" onClick={startWatcher} disabled={busy}>
-                  Start watcher with defaults/overrides
-                </Button>
-                <Button variant="ghost" onClick={() => void refreshWatchers()}>
-                  Refresh status
-                </Button>
-              </div>
-
-              {msg && <p className="mt-2 text-sm">{msg}</p>}
-
-              <div className="mt-5 rounded-xl border p-3">
-                <div className="font-medium">Active watchers</div>
-                {activeWatchers.length === 0 ? (
-                  <div className="text-sm opacity-70 mt-2">None</div>
-                ) : (
-                  <ul className="mt-2 space-y-2">
-                    {activeWatchers.map((k) => (
-                      <li key={k} className="flex items-center justify-between gap-2 rounded border p-2">
-                        <code className="text-xs break-all">{k}</code>
-                        <Button variant="ghost" onClick={() => void stopWatcher(k)} disabled={busy}>
-                          Stop
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              <div className="mt-6 flex justify-end gap-2">
-                <Dialog.Close asChild>
-                  <Button type="button" variant="settings">
-                    Close
-                  </Button>
-                </Dialog.Close>
+                <footer className="p-4 border-t flex justify-end gap-2">
+                  {/* Extra safety: also close via state in case custom Button doesn’t forward refs */}
+                  <Dialog.Close asChild>
+                    <Button type="button" variant="settings" onClick={() => setWatchOpen(false)}>
+                      Close
+                    </Button>
+                  </Dialog.Close>
+                </footer>
               </div>
             </Dialog.Content>
           </Dialog.Portal>
         </Dialog.Root>
 
-        {/* Recipe Manager dialog */}
+        {/* Recipe Manager dialog (owns its own sizing/close behavior) */}
         <RecipeManager open={recipeMgrOpen} onOpenChange={setRecipeMgrOpen} />
 
         {/* Dropdown trigger & content */}

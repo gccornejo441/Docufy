@@ -18,6 +18,7 @@ from . import settings
 from .settings_api import router as settings_router
 from .recipes import get_recipe 
 from .recipes_api import router as recipes_router
+from .webhook_api import router as webhook_router
 
 from docufy_ocr import __version__ as docuocr_version, DocuOCR
 
@@ -38,6 +39,7 @@ app = FastAPI(title="DocuOCR Text Extraction API", version="1.0.0")
 app.include_router(watch_router)
 app.include_router(settings_router)
 app.include_router(recipes_router)
+app.include_router(webhook_router)
 
 origins = [
     "http://localhost:5173",

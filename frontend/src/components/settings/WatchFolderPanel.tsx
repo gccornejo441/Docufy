@@ -24,7 +24,8 @@ export default function WatchFolderPanel() {
   }
 
   async function save() {
-    setLoading(true); setMsg("");
+    setLoading(true);
+    setMsg("");
     const r = await fetch(`${API_BASE}/settings`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -32,7 +33,10 @@ export default function WatchFolderPanel() {
     });
     const j = await r.json();
     setLoading(false);
-    if (!r.ok) { setMsg(j?.detail || "Failed to save settings"); return; }
+    if (!r.ok) {
+      setMsg(j?.detail || "Failed to save settings");
+      return;
+    }
     setS(j);
     setMsg("Saved.");
   }
@@ -51,43 +55,56 @@ export default function WatchFolderPanel() {
     setMsg(r.ok ? `Watcher started: ${j.key}` : (j?.detail || "Failed to start watcher"));
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border p-4">
+      <div className="rounded-xl border p-4 max-w-full">
         <h2 className="text-lg font-semibold">Defaults</h2>
 
         <label className="block mt-3 text-sm">Default watch folder (server path)</label>
         <input
-          className="w-full rounded border px-3 py-2"
+          className="w-full rounded border px-3 py-2 break-all"
           value={s.default_watch_folder}
           onChange={(e) => setS({ ...s, default_watch_folder: e.target.value })}
-          placeholder="C:\Docufy\Inbox"
+          placeholder="C:\\Docufy\\Inbox"
+          autoComplete="off"
         />
 
         <label className="block mt-3 text-sm">Default recipe id</label>
         <input
-          className="w-full rounded border px-3 py-2"
+          className="w-full rounded border px-3 py-2 break-all"
           value={s.default_recipe_id}
           onChange={(e) => setS({ ...s, default_recipe_id: e.target.value })}
           placeholder="default"
+          autoComplete="off"
         />
 
         <label className="block mt-3 text-sm">Output folder (server path)</label>
         <input
-          className="w-full rounded border px-3 py-2"
+          className="w-full rounded border px-3 py-2 break-all"
           value={s.out_dir}
           onChange={(e) => setS({ ...s, out_dir: e.target.value })}
-          placeholder="C:\Docufy\Outbox"
+          placeholder="C:\\Docufy\\Outbox"
+          autoComplete="off"
         />
 
-        <div className="mt-4 flex gap-2">
-          <Button onClick={save} disabled={loading}>Save defaults</Button>
-          <Button variant="secondary" onClick={startWatcher}>Start watcher with defaults</Button>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button onClick={save} disabled={loading}>
+            <span className="whitespace-nowrap">Save defaults</span>
+          </Button>
+          <Button variant="secondary" onClick={startWatcher}>
+            <span className="whitespace-nowrap">Start watcher with defaults</span>
+          </Button>
         </div>
 
-        {msg && <p className="mt-2 text-sm">{msg}</p>}
+        {msg && (
+          <p className="mt-2 text-sm" aria-live="polite">
+            {msg}
+          </p>
+        )}
 
         <p className="text-xs opacity-70 mt-3">
           Tip: These are <b>server</b> paths. If your API runs in Docker or on another machine,
