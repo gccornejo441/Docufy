@@ -71,7 +71,6 @@ def _make_ocr(dpi: Optional[int] = None, lang: Optional[str] = None) -> DocuOCR:
     return ocr
 
 
-# --------- UPDATED: use recipe (id or path) to influence OCR options ----------
 def process_document(src_path: Path, recipe_ref: str):
     """
     Called by the watch worker for each new file it detects.
@@ -81,7 +80,6 @@ def process_document(src_path: Path, recipe_ref: str):
     logger.info("Watch: processing file=%s recipe=%s", src_path, recipe_ref)
 
     recipe = get_recipe(recipe_ref) or {}
-    # pull options from recipe if present
     recipe_pp = recipe.get("preprocess") or {}
     dpi = recipe_pp.get("dpi")
     lang = recipe.get("language")
@@ -327,7 +325,7 @@ async def extract_region(
         0, description="Rotation applied in viewer (0,90,180,270)"),
     dpi: Optional[int] = Form(None),
     lang: Optional[str] = Form(None),
-    debug: int = Form(0),  # set to 1 to save debug crops A/B
+    debug: int = Form(0), 
 ):
     if not file.filename:
         raise HTTPException(status_code=400, detail="Missing filename.")
