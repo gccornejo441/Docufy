@@ -311,7 +311,6 @@ def _save_region_debug_png(
         return out
 # ------------------------------------------------------
 
-
 @app.post("/extract/region", response_model=RegionExtractResponse)
 async def extract_region(
     background_tasks: BackgroundTasks,
@@ -346,7 +345,6 @@ async def extract_region(
     except Exception:
         logger.info("Saved temp PDF: %s", tmp_pdf)
 
-    # optional debug crops
     if debug:
         try:
             a = _save_region_debug_png(
