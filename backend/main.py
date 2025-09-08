@@ -54,7 +54,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Where the watch worker writes extracted JSON files (global default)
+# Where the watch worker writes extracted JSON files
 OUT_DIR = os.getenv("DOCUFY_OUT_DIR", str(
     (Path(__file__).parent / "out").resolve()))
 
