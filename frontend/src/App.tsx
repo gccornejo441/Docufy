@@ -156,11 +156,8 @@ export default function App() {
           isUploading={ocr.isUploading || running}
           isDocReady={!!ocr.file}
           onOpenDoc={() => setViewerOpen(true)}
-          // Route screenshots through normalization -> PDF -> input path
           onCaptureScreenshot={(file) => {
             void ingestFiles([file]);
-            // Optionally open viewer immediately:
-            // setViewerOpen(true);
           }}
           onCaptureError={(e) => console.warn("Screenshot error:", e)}
         />
