@@ -298,7 +298,7 @@ export default function RecipeManager({ open, onOpenChange }: Props) {
                                                         <div className="text-xs opacity-60 truncate">{it.path}</div>
                                                     </button>
 
-                                                    {/* Delete (tooltip) */}
+                                                    {/* Delete */}
                                                     <Tooltip.Root>
                                                         <Tooltip.Trigger asChild>
                                                             <button
