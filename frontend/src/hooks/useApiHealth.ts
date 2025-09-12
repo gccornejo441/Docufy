@@ -69,7 +69,7 @@ export default function useApiHealth(
           await fetchWithTimeout(url);
           if (ok) break;
         } catch {
-          // ignore and continue
+          // ignore
         }
       }
 
