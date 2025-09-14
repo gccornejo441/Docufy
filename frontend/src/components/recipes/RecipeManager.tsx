@@ -199,6 +199,7 @@ export default function RecipeManager({ open, onOpenChange }: Props) {
             void refreshList();
             void refreshPresets();
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
 
     return (
