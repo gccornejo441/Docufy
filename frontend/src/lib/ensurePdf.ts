@@ -17,7 +17,6 @@ async function imageFileToPdf(file: File): Promise<File> {
     const bytes = await file.arrayBuffer();
     img = await pdf.embedJpg(bytes);
   } else if (mime.startsWith("image/")) {
-    // Fallback for other image formats: render to canvas → PNG → embed
     const bitmap = await createImageBitmap(file);
     const canvas = document.createElement("canvas");
     canvas.width = bitmap.width;
