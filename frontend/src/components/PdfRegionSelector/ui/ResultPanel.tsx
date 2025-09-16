@@ -20,7 +20,7 @@ export default function ResultPanel({
                 <b className="font-semibold">Extract Selection</b>.
             </div>
 
-            {/* Results area */}
+            {/* Results */}
             <div
                 className={[
                     "flex-1 rounded-xl border p-3 overflow-auto whitespace-pre-wrap",
