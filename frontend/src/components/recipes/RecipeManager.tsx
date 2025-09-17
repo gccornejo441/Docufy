@@ -30,6 +30,15 @@ import type {
 
 type Props = { open: boolean; onOpenChange: (v: boolean) => void };
 
+/**
+ * Return a string representation of an error object.
+ * If e is an instance of Error, return its message.
+ * If e is a string, return it.
+ * Otherwise, try to serialize e to a JSON string.
+ * If that fails, return the result of calling String(e).
+ * @param {unknown} e
+ * @returns {string}
+ */
 function getErrorMessage(e: unknown): string {
     if (e instanceof Error) return e.message;
     if (typeof e === "string") return e;
